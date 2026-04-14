@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const { initDb } = require('./config/db');
 
 const app = express();
 const server = http.createServer(app);
@@ -36,6 +37,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
+  await initDb();
   console.log(`Server listening on port ${PORT}`);
 });
