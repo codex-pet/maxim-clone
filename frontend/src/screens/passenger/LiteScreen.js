@@ -77,7 +77,8 @@ Passenger Name: Erl Yves`;
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          bounces={false}
+          bounces={true}
+          overScrollMode="always"
           scrollEventThrottle={16}
         >
           <View style={{ height: HEADER_SPACE }} />
@@ -103,7 +104,6 @@ Passenger Name: Erl Yves`;
 
             <View style={styles.card}>
 
-              {/* ONLINE WARNING BANNER */}
               {isConnected && (
                 <View style={styles.onlineWarning}>
                   <Ionicons name="wifi-outline" size={16} color={COLORS.primaryGreen} />
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
   },
   panelSubtitle: {
     fontSize: 13,
-    color: COLORS.textSecondary, 
+    color: COLORS.textSecondary,
     marginBottom: 16,
   },
 });
