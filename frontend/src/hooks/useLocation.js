@@ -2,24 +2,24 @@ import { useState, useEffect } from "react";
 import * as Location from "expo-location";
 
 export default function useLocation() {
-    const [location, setLocation] = useState(null);
-    const [errorMsg, setErrorMsg] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
 
-    useEffect(() => {
-        async function getLocation() {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            
-            if (status !== 'granted') {
-                setErrorMsg('Permission denied');
-                return;
-            }
+  useEffect(() => {
+    async function getLocation() {
+      const { status } = await Location.requestForegroundPermissionsAsync();
 
-            const current = await Location.getCurrentPositionAsync({});
-            setLocation(current);
-        }
+      if (status !== 'granted') {
+        setErrorMsg('Permission denied');
+        return;
+      }
 
-        getLocation();
-    }, []);
+      const current = await Location.getCurrentPositionAsync({});
+      setLocation(current);
+    }
 
-    return { location, errorMsg };
+    getLocation();
+  }, []);
+
+  return { location, errorMsg };
 }

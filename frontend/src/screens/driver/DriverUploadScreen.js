@@ -9,12 +9,13 @@ export default function DriverUploadScreen({ navigation, route }) {
   const { phone, email } = route.params || {};
   const [idPhoto, setIdPhoto] = useState(null);
   const [profilePhoto, setProfilePhoto] = useState(null);
+  const [gender, setGender] = useState(null);
 
   const handleSubmit = () => {
-    navigation.navigate('DriverPending');
+    navigation.navigate('DriverPending', { phone, email, gender });
   };
 
-  const bothUploaded = idPhoto && profilePhoto;
+  const bothUploaded = idPhoto && profilePhoto && gender;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
@@ -130,6 +131,46 @@ export default function DriverUploadScreen({ navigation, route }) {
             )}
           </TouchableOpacity>
 
+          {/* GENDER SELECTION */}
+          <Text style={styles.sectionTitle}>Gender</Text>
+          <Text style={styles.genderNote}>
+            Required for Ladies-Only ride matching
+          </Text>
+          <View style={styles.genderRow}>
+            <TouchableOpacity
+              style={[styles.genderButton, gender === 'male' && styles.genderButtonActive]}
+              onPress={() => setGender('male')}
+            >
+              <Ionicons
+                name="male-outline"
+                size={24}
+                color={gender === 'male' ? COLORS.background : COLORS.textSecondary}
+              />
+              <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>
+                Male
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.genderButton, gender === 'female' && styles.genderButtonActiveFemale]}
+              onPress={() => setGender('female')}
+            >
+              <Ionicons
+                name="female-outline"
+                size={24}
+                color={gender === 'female' ? COLORS.background : COLORS.textSecondary}
+              />
+              <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>
+                Female
+              </Text>
+              {gender === 'female' && (
+                <View style={styles.ladiesOnlyBadge}>
+                  <Text style={styles.ladiesOnlyBadgeText}>Ladies-Only Eligible</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
           {/* NOTE */}
           <View style={styles.noteCard}>
             <Ionicons name="information-circle-outline" size={20} color={COLORS.primary} />
@@ -155,6 +196,55 @@ export default function DriverUploadScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  genderNote: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 10,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  genderButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.backgroundLight,
+    gap: 8,
+  },
+  genderButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  genderButtonActiveFemale: {
+    backgroundColor: COLORS.ladiesOnly,
+    borderColor: COLORS.ladiesOnly,
+  },
+  genderText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: COLORS.textSecondary,
+  },
+  genderTextActive: {
+    color: COLORS.background,
+  },
+  ladiesOnlyBadge: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 10,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+  },
+  ladiesOnlyBadgeText: {
+    fontSize: 10,
+    color: COLORS.background,
+    fontWeight: 'bold',
+  },
+
   backButton: {
     padding: 16,
   },

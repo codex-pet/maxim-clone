@@ -11,6 +11,7 @@ import BookButton from '../../components/BookButton';
 import LadiesOnlyBanner from '../../components/LadiesOnlyBanner';
 import useNetworkStatus from '../../hooks/useNetworkStatus';
 import { COLORS } from '../../constants/colors';
+import useLocation from '../../hooks/useLocation';
 
 export default function BookScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -19,6 +20,7 @@ export default function BookScreen({ navigation }) {
   const [pickup, setPickup] = useState('');
   const [destination, setDestination] = useState('');
   const nav = useNavigation();
+  const { location } = useLocation();
 
   const isLadiesOnly = rideType === 'ladiesOnly';
 
@@ -43,7 +45,11 @@ export default function BookScreen({ navigation }) {
 
         {/* MAP */}
         <View style={styles.map}>
-          <MapPlaceholder color={isLadiesOnly ? COLORS.ladiesOnly : null} />
+          <MapPlaceholder
+            color={isLadiesOnly ? COLORS.ladiesOnly : null}
+            latitude={location?.coords.latitude}
+            longitude={location?.coords.longitude}
+          />
         </View>
 
         <View style={styles.content}>

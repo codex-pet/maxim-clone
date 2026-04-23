@@ -6,9 +6,9 @@ import { COLORS } from '../constants/colors';
 
 export default function OTPScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { phone, email, isLogin, isDriver } = route.params;
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const inputs = useRef([]);
-  const { phone, email, isLogin, isDriver } = route.params;
 
   const handleChange = (text, index) => {
     const newOtp = [...otp];
@@ -25,13 +25,18 @@ export default function OTPScreen({ navigation, route }) {
     }
   };
 
-const handleVerify = () => {
-  if (isDriver) {
-    navigation.navigate('DriverUpload', { phone, email });
-  } else {
-    navigation.navigate('MainTabs');
-  }
-};
+  const handleVerify = () => {
+    if (isDriver) {
+      if (isLogin) {
+        navigation.navigate('DriverTabs', { gender: 'male' });
+      } else {
+        navigation.navigate('DriverUpload', { phone, email });
+      }
+    } else {
+      navigation.navigate('MainTabs');
+    }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
 
@@ -199,5 +204,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
+    paddingHorizontal: 16,
   },
 });
