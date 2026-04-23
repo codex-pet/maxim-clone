@@ -1,11 +1,14 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
+import { useState } from 'react';
+import SOSModal from './SOSModal';
 
 export default function Header() {
+  const [sosVisible, setSosVisible] = useState(false);
+
   return (
     <View style={styles.header}>
-
       <View style={styles.leftSide}>
         <View style={styles.container}>
           <Ionicons name="car-outline" size={24} color={COLORS.primary} />
@@ -14,12 +17,23 @@ export default function Header() {
       </View>
 
       <View style={styles.rightSide}>
+        <TouchableOpacity
+          style={styles.sosButton}
+          onPress={() => setSosVisible(true)}
+        >
+          <Text style={styles.sosText}>SOS</Text>
+        </TouchableOpacity>
         <View style={styles.container}>
           <Ionicons name="person-outline" size={24} color={COLORS.primary} />
         </View>
       </View>
+
+      <SOSModal
+        visible={sosVisible}
+        onClose={() => setSosVisible(false)}
+      />
     </View>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -29,26 +43,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'transparent',
   },
-
   leftSide: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-
   logo: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.primary
+    color: COLORS.primary,
   },
-
   rightSide: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center'
+    gap: 8,
   },
-
   container: {
     backgroundColor: COLORS.background,
     borderRadius: 20,
@@ -60,5 +70,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-}
-})
+  },
+  sosButton: {
+    backgroundColor: COLORS.danger,
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  sosText: {
+    color: COLORS.background,
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+});

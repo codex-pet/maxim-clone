@@ -1,24 +1,23 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ScrollView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import Header from '../../components/Header';
 import MapPlaceholder from '../../components/MapPlaceholder';
 import FeatureCard from '../../components/FeatureCard';
 import useNetworkStatus from '../../hooks/useNetworkStatus';
+import useLocation from '../../hooks/useLocation';
 import { COLORS } from '../../constants/colors';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { isConnected } = useNetworkStatus();
+  const { location } = useLocation();
   const navigation = useNavigation();
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }}>
       <Header />
-
-      {/* POOR CONNECTION BANNER */}
       {!isConnected && (
         <TouchableOpacity
           style={styles.offlineBanner}
@@ -30,32 +29,30 @@ export default function HomeScreen() {
           </Text>
         </TouchableOpacity>
       )}
-
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 20 }}
       >
         <View style={styles.container}>
-          <MapPlaceholder />
+         <MapPlaceholder
+  latitude={location?.coords.latitude}
+  longitude={location?.coords.longitude}
+/>
         </View>
-
         <View style={styles.view}>
           <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 10, color: COLORS.text }}>
             New Features
           </Text>
-
           <FeatureCard
             icon="flash-outline"
             title="Offline Booking Mode"
             description="Allows user to book offline via SMS"
           />
-
           <FeatureCard
             icon="mic-outline"
             title="Voice Communication"
             description="Auto translate - Hands Free - Real Time"
           />
-
           <FeatureCard
             color={COLORS.ladiesOnly}
             icon="female-outline"

@@ -1,16 +1,19 @@
-import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import AppNavigator from './src/navigation/AppNavigator';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useEffect } from 'react';
+import * as Location from 'expo-location';
 
 export default function App() {
+  useEffect(() => {
+    async function requestPermissions() {
+      await Location.requestForegroundPermissionsAsync();
+    }
+    requestPermissions();
+  }, []);
+
   return (
-    <SafeAreaProvider>
-      <NavigationContainer>
-        <StatusBar style="auto" />
-        <AppNavigator />
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <NavigationContainer>
+      <AppNavigator />
+    </NavigationContainer>
   );
 }

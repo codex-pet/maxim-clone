@@ -2,9 +2,9 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 
 import { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../constants/colors';
+import { COLORS } from '../../constants/colors';
 
-export default function AuthScreen({ navigation }) {
+export default function DriverAuthScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [isLogin, setIsLogin] = useState(true);
   const [phone, setPhone] = useState('');
@@ -13,20 +13,27 @@ export default function AuthScreen({ navigation }) {
   const [useEmail, setUseEmail] = useState(false);
 
   const handleContinue = () => {
-    navigation.navigate('OTP', { phone, email, isLogin, isDriver: false });
+    navigation.navigate('OTP', { phone, email, isLogin, isDriver: true });
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
+
+      {/* BACK BUTTON */}
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back-outline" size={24} color={COLORS.background} />
+      </TouchableOpacity>
+
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <Ionicons name="car-outline" size={40} color={COLORS.background} />
+            <Ionicons name="car-sport-outline" size={40} color={COLORS.background} />
           </View>
           <Text style={styles.appName}>MAXIM</Text>
-          <Text style={styles.tagline}>Safe, Reliable, Always There</Text>
+          <Text style={styles.role}>Driver Portal</Text>
+          <Text style={styles.tagline}>Earn, Drive, Deliver</Text>
         </View>
 
         {/* AUTH CARD */}
@@ -54,13 +61,21 @@ export default function AuthScreen({ navigation }) {
 
           {/* TITLE */}
           <Text style={styles.title}>
-            {isLogin ? 'Welcome Back!' : 'Create Account'}
+            {isLogin ? 'Welcome Back, Driver!' : 'Become a Driver'}
           </Text>
           <Text style={styles.subtitle}>
             {isLogin
-              ? 'Login to continue your ride experience'
-              : 'Register to start booking rides'}
+              ? 'Login to start accepting rides'
+              : 'Register and start earning today'}
           </Text>
+
+          {/* DRIVER BADGE */}
+          <View style={styles.driverBadge}>
+            <Ionicons name="shield-checkmark-outline" size={16} color={COLORS.primary} />
+            <Text style={styles.driverBadgeText}>
+              Driver accounts require identity verification
+            </Text>
+          </View>
 
           {/* NAME FIELD - Register only */}
           {!isLogin && (
@@ -139,35 +154,38 @@ export default function AuthScreen({ navigation }) {
             onPress={handleContinue}
           >
             <Text style={styles.continueButtonText}>
-              {isLogin ? 'Send OTP' : 'Create Account'}
+              {isLogin ? 'Send OTP' : 'Continue to Verification'}
             </Text>
             <Ionicons name="arrow-forward-outline" size={20} color={COLORS.background} />
           </TouchableOpacity>
 
-          {/* DIVIDER */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or continue as</Text>
-            <View style={styles.dividerLine} />
-          </View>
+          {/* REQUIREMENTS - Register only */}
+          {!isLogin && (
+            <View style={styles.requirementsCard}>
+              <Text style={styles.requirementsTitle}>You will need:</Text>
+              <View style={styles.requirementItem}>
+                <Ionicons name="card-outline" size={16} color={COLORS.primary} />
+                <Text style={styles.requirementText}>Valid Government ID</Text>
+              </View>
+              <View style={styles.requirementItem}>
+                <Ionicons name="camera-outline" size={16} color={COLORS.primary} />
+                <Text style={styles.requirementText}>Clear Profile Photo</Text>
+              </View>
+              <View style={styles.requirementItem}>
+                <Ionicons name="phone-portrait-outline" size={16} color={COLORS.primary} />
+                <Text style={styles.requirementText}>Active Phone Number</Text>
+              </View>
+            </View>
+          )}
 
-          {/* GUEST BUTTON */}
+          {/* PASSENGER LINK */}
           <TouchableOpacity
-            style={styles.guestButton}
-            onPress={() => navigation.navigate('MainTabs')}
+            style={styles.passengerLink}
+            onPress={() => navigation.navigate('Auth')}
           >
-            <Ionicons name="person-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.guestButtonText}>Continue as Guest</Text>
-          </TouchableOpacity>
-
-          {/* DRIVER LINK */}
-          <TouchableOpacity
-            style={styles.driverLink}
-            onPress={() => navigation.navigate('DriverAuth')}
-          >
-            <Text style={styles.driverLinkText}>
-              Are you a driver?{' '}
-              <Text style={styles.driverLinkBold}>Register here</Text>
+            <Text style={styles.passengerLinkText}>
+              Looking to book a ride?{' '}
+              <Text style={styles.passengerLinkBold}>Passenger Login</Text>
             </Text>
           </TouchableOpacity>
 
@@ -178,10 +196,17 @@ export default function AuthScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  backButton: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 10,
+    padding: 8,
+  },
   header: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primaryGreen,
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 48,
     paddingHorizontal: 24,
   },
   logoContainer: {
@@ -199,10 +224,18 @@ const styles = StyleSheet.create({
     color: COLORS.background,
     letterSpacing: 4,
   },
-  tagline: {
-    fontSize: 14,
+  role: {
+    fontSize: 16,
     color: COLORS.background,
-    opacity: 0.8,
+    opacity: 0.9,
+    marginTop: 4,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+  tagline: {
+    fontSize: 13,
+    color: COLORS.background,
+    opacity: 0.7,
     marginTop: 4,
   },
   card: {
@@ -239,7 +272,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   activeTabText: {
-    color: COLORS.primary,
+    color: COLORS.primaryGreen,
     fontWeight: 'bold',
   },
   title: {
@@ -251,7 +284,23 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: COLORS.textSecondary,
-    marginBottom: 24,
+    marginBottom: 16,
+  },
+  driverBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#E8F0FE',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  driverBadgeText: {
+    fontSize: 13,
+    color: COLORS.primary,
+    flex: 1,
   },
   inputWrapper: {
     marginBottom: 16,
@@ -299,7 +348,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   continueButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primaryGreen,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -313,47 +362,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
-  dividerText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  guestButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
+  requirementsCard: {
+    backgroundColor: COLORS.backgroundLight,
     borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: COLORS.primary,
-    marginBottom: 16,
+    borderColor: COLORS.border,
+    gap: 10,
   },
-  guestButtonText: {
-    fontSize: 15,
-    color: COLORS.primary,
+  requirementsTitle: {
+    fontSize: 14,
     fontWeight: 'bold',
+    color: COLORS.text,
+    marginBottom: 4,
   },
-  driverLink: {
+  requirementItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    gap: 8,
   },
-  driverLinkText: {
+  requirementText: {
     fontSize: 14,
     color: COLORS.textSecondary,
   },
-  driverLinkBold: {
-    color: COLORS.primary,
+  passengerLink: {
+    alignItems: 'center',
+  },
+  passengerLinkText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  passengerLinkBold: {
+    color: COLORS.primaryGreen,
     fontWeight: 'bold',
   },
 });
