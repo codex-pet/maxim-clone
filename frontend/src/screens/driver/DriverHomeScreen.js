@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MapPlaceholder from '../../components/MapPlaceholder';
 import SOSModal from '../../components/SOSModal';
 import { COLORS } from '../../constants/colors';
+import DriverHeader from '../../components/DriverHeader';
 
 export default function DriverHomeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -23,35 +24,12 @@ export default function DriverHomeScreen({ navigation, route }) {
     <View style={{ flex: 1, backgroundColor: COLORS.backgroundLight, paddingTop: insets.top }}>
 
       {/* DRIVER HEADER */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.avatarContainer}>
-            <Ionicons name="person-outline" size={24} color={COLORS.background} />
-          </View>
-          <View>
-            <Text style={styles.driverName}>Erl Yves</Text>
-            <View style={styles.statusRow}>
-              <View style={[styles.statusDot, { backgroundColor: isOnline ? COLORS.primaryGreen : COLORS.danger }]} />
-              <Text style={styles.statusText}>{isOnline ? 'Online' : 'Offline'}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.sosButton}
-            onPress={() => setSosVisible(true)}
-          >
-            <Text style={styles.sosText}>SOS</Text>
-          </TouchableOpacity>
-          <Switch
-            value={isOnline}
-            onValueChange={setIsOnline}
-            trackColor={{ false: COLORS.border, true: COLORS.primaryGreen }}
-            thumbColor={COLORS.background}
-          />
-        </View>
-      </View>
+      <DriverHeader
+        driverName="Erl Yves"
+        isOnline={isOnline}
+        onToggleOnline={setIsOnline}
+        gender={gender}
+      />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
 

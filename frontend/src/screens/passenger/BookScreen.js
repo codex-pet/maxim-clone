@@ -12,6 +12,7 @@ import LadiesOnlyBanner from '../../components/LadiesOnlyBanner';
 import useNetworkStatus from '../../hooks/useNetworkStatus';
 import { COLORS } from '../../constants/colors';
 import useLocation from '../../hooks/useLocation';
+import ErrorBanner from '../../components/ErrorBanner';
 
 export default function BookScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -20,7 +21,7 @@ export default function BookScreen({ navigation }) {
   const [pickup, setPickup] = useState('');
   const [destination, setDestination] = useState('');
   const nav = useNavigation();
-  const { location } = useLocation();
+  const { location, errorMsg } = useLocation();
 
   const isLadiesOnly = rideType === 'ladiesOnly';
 
@@ -36,9 +37,18 @@ export default function BookScreen({ navigation }) {
         >
           <Ionicons name="flash-outline" size={16} color={COLORS.background} />
           <Text style={styles.offlineBannerText}>
-            Poor connection — Tap to switch to Lite Mode
+            Poor connection — Online booking unavailable. Tap to use Lite Mode
           </Text>
         </TouchableOpacity>
+      )}
+
+      {/* LOCATION ERROR BANNER */}
+      {errorMsg && (
+        <ErrorBanner
+          icon="location-off-outline"
+          message="Location access denied. Please enable it in Settings for accurate pickup detection."
+          color={COLORS.primary}
+        />
       )}
 
       <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
