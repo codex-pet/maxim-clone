@@ -10,17 +10,19 @@ import BookingStatusItem from '../../components/BookingStatusItem';
 import useLocation from '../../hooks/useLocation';
 import useNetworkStatus from '../../hooks/useNetworkStatus';
 import { COLORS } from '../../constants/colors';
+import ErrorBanner from '../../components/ErrorBanner';
 
 const { height } = Dimensions.get('window');
 const HEADER_SPACE = height * 0.35;
 
 export default function LiteScreen() {
   const insets = useSafeAreaInsets();
-  const { location } = useLocation();
+  const { location, errorMsg } = useLocation();
   const { isConnected } = useNetworkStatus();
   const [destination, setDestination] = useState('');
   const [pickup, setPickup] = useState('Potol, Dapitan City');
   const [panelVisible, setPanelVisible] = useState(false);
+
 
   const scrollRef = useRef(null);
   const confirmAnim = useRef(new Animated.Value(600)).current;
@@ -103,6 +105,15 @@ Passenger Name: Erl Yves`;
             </View>
 
             <View style={styles.card}>
+
+              {/* LOCATION ERROR BANNER */}
+              {errorMsg && (
+                <ErrorBanner
+                  icon="location-off-outline"
+                  message="Location access denied. Please enable it in Settings to use GPS booking."
+                  color={COLORS.cta}
+                />
+              )}
 
               {isConnected && (
                 <View style={styles.onlineWarning}>

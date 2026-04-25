@@ -1,10 +1,13 @@
 import { View, Text, StyleSheet, ScrollView, Switch, Modal, TouchableOpacity, FlatList, Animated } from 'react-native';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import MicButton from '../../components/MicButton';
 import LanguageSelector from '../../components/LanguageSelector';
 import TranscriptItem from '../../components/TranscriptItem';
+import ErrorBanner from '../../components/ErrorBanner';
+import useAudioRecorder from '../../hooks/useAudioRecorder';
 import { COLORS } from '../../constants/colors';
 
 const LANGUAGES = [
@@ -19,9 +22,9 @@ export default function VoiceScreen() {
   const [autoDetect, setAutoDetect] = useState(true);
   const [fromLang, setFromLang] = useState(LANGUAGES[1]);
   const [toLang, setToLang] = useState(LANGUAGES[0]);
-  const [recordingState, setRecordingState] = useState('idle');
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedSide, setSelectedSide] = useState(null);
+  const [micError, setMicError] = useState(null);
   const [transcripts, setTranscripts] = useState([
     { id: 1, original: 'Taga asa ka sir?', translation: 'Where are you from sir?' },
     { id: 2, original: 'Baho kaykay ilok.', translation: "You're so handsome." },
@@ -29,6 +32,39 @@ export default function VoiceScreen() {
 
   const modalAnim = useRef(new Animated.Value(300)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
+
+  const {
+    isRecording,
+    isProcessing,
+    error: recordingError,
+    startRecording,
+    stopRecording,
+    clearError,
+  } = useAudioRecorder();
+
+  const recordingState = isRecording ? 'recording' : isProcessing ? 'processing' : 'idle';
+
+  // Request mic permission on mount
+  useEffect(() => {
+    async function requestMicPermission() {
+      try {
+        const { status } = await Audio.requestPermissionsAsync();
+        if (status !== 'granted') {
+          setMicError('Microphone access denied. Please enable it in Settings to use Voice Communication.');
+        }
+      } catch (error) {
+        setMicError('Failed to request microphone permission. Please try again.');
+      }
+    }
+    requestMicPermission();
+  }, []);
+
+  // Show recording error if any
+  useEffect(() => {
+    if (recordingError) {
+      setMicError(recordingError);
+    }
+  }, [recordingError]);
 
   const openModal = (side) => {
     setSelectedSide(side);
@@ -77,18 +113,37 @@ export default function VoiceScreen() {
     closeModal();
   };
 
-  const handlePressIn = () => setRecordingState('recording');
+  const handlePressIn = async () => {
+    if (micError) return;
+    await startRecording();
+  };
 
-  const handlePressOut = () => {
-    setRecordingState('processing');
-    setTimeout(() => {
+  const handlePressOut = async () => {
+    if (micError) return;
+    const uri = await stopRecording();
+    if (uri) {
+      console.log('Audio URI:', uri);
+      // TODO: send uri to backend transcription API
       setTranscripts(prev => [...prev, {
         id: Date.now(),
-        original: 'Sample recorded text...',
-        translation: 'Sample translation...',
+        original: 'Recording captured — awaiting transcription API...',
+        translation: 'Connect backend to get real translation',
       }]);
-      setRecordingState('idle');
-    }, 1500);
+    }
+  };
+
+  const handleRetryMic = async () => {
+    try {
+      clearError();
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status === 'granted') {
+        setMicError(null);
+      } else {
+        setMicError('Microphone access still denied. Please enable it in Settings.');
+      }
+    } catch (error) {
+      setMicError('Failed to request microphone permission. Please try again.');
+    }
   };
 
   return (
@@ -108,6 +163,16 @@ export default function VoiceScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+
+        {/* MIC ERROR BANNER */}
+        {micError && (
+          <ErrorBanner
+            icon="mic-off-outline"
+            message={micError}
+            onRetry={handleRetryMic}
+          />
+        )}
+
         <View style={styles.content}>
 
           {/* AUTO DETECT TOGGLE */}
@@ -149,9 +214,13 @@ export default function VoiceScreen() {
             onPressOut={handlePressOut}
           />
           <Text style={styles.hint}>
-            {recordingState === 'idle' && 'Hold mic button to speak - Release to send'}
-            {recordingState === 'recording' && 'Listening... Release to send'}
-            {recordingState === 'processing' && 'Analyzing and translating...'}
+            {micError
+              ? 'Microphone unavailable'
+              : recordingState === 'idle'
+              ? 'Hold mic button to speak - Release to send'
+              : recordingState === 'recording'
+              ? 'Listening... Release to send'
+              : 'Analyzing and translating...'}
           </Text>
 
           {/* TRANSCRIPTS */}
