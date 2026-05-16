@@ -1,15 +1,11 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  phoneNumber: {
-    type: String,
-    required: true,
-    unique: true
-  },
-  name: {
-    type: String,
-    trim: true
-  },
+  firebaseUid: { type: String, unique: true, sparse: true },
+  phoneNumber: { type: String, unique: true, sparse: true },
+  email: { type: String, unique: true, sparse: true },
+  name: { type: String, trim: true, default: '' },
+  profilePhoto: { type: String, default: '' },
   role: {
     type: String,
     enum: ['PASSENGER', 'DRIVER', 'ADMIN'],
@@ -17,31 +13,22 @@ const userSchema = new mongoose.Schema({
   },
   gender: {
     type: String,
-    enum: ['male', 'female', 'other']
+    enum: ['male', 'female', 'unspecified'],
+    default: 'unspecified'
   },
-  isVerified: {
-    type: Boolean,
-    default: false
-  },
-  // FR 2.1 - Geolocation tracking for drivers
   liveLocation: {
-    type: {
-      type: String,
-      enum: ['Point'],
-      default: 'Point'
-    },
-    coordinates: {
-      type: [Number], // [longitude, latitude]
-      default: [0, 0]
-    }
+    type: { type: String, enum: ['Point'], default: 'Point' },
+    coordinates: { type: [Number], default: [0, 0] } // [longitude, latitude]
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+  vehicleInfo: {
+    model: { type: String, default: '' },
+    plateNumber: { type: String, default: '' },
+    color: { type: String, default: '' }
+  },
+  createdAt: { type: Date, default: Date.now }
 });
 
-// Create 2dsphere index for geospatial queries
+// For future Driver Tracking features
 userSchema.index({ liveLocation: '2dsphere' });
 
 module.exports = mongoose.model('User', userSchema);

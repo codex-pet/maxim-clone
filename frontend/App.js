@@ -1,7 +1,8 @@
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import AppNavigator from './src/navigation/AppNavigator';
-import { useEffect } from 'react';
 import * as Location from 'expo-location';
+import { AuthProvider } from './src/context/AuthContext';
 
 export default function App() {
   useEffect(() => {
@@ -12,8 +13,10 @@ export default function App() {
   }, []);
 
   return (
-    <NavigationContainer>
-      <AppNavigator />
-    </NavigationContainer>
+    <AuthProvider>
+      <NavigationContainer>
+        <AppNavigator />
+      </NavigationContainer>
+    </AuthProvider>
   );
 }

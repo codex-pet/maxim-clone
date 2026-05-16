@@ -1,69 +1,120 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
-import { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { useState, useRef, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
+
+// --- FIREBASE IMPORTS ---
+import { PhoneAuthProvider, signInWithCredential } from 'firebase/auth';
+import { auth } from '../config/firebase';
 
 export default function OTPScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { phone, email, isLogin, isDriver } = route.params;
+  const { login } = useAuth();
+
+  // Extract verificationId passed from AuthScreen
+  const { phone, email, name, gender, isLogin, isDriver, verificationId, emailOtp } = route.params;
+
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [loading, setLoading] = useState(false);
   const inputs = useRef([]);
 
   const handleChange = (text, index) => {
     const newOtp = [...otp];
     newOtp[index] = text;
     setOtp(newOtp);
-    if (text && index < 5) {
-      inputs.current[index + 1].focus();
-    }
+    if (text && index < 5) inputs.current[index + 1].focus();
   };
 
   const handleKeyPress = (e, index) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputs.current[index - 1].focus();
-    }
+    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) inputs.current[index - 1].focus();
   };
 
-  const handleVerify = () => {
-    if (isDriver) {
-      if (isLogin) {
-        navigation.navigate('DriverTabs', { gender: 'male' });
+  const handleVerify = async () => {
+    const otpCode = otp.join('');
+    if (otpCode.length < 6) return;
+
+    setLoading(true);
+
+    try {
+      let idToken = null;
+      let syncData = { role: isDriver ? 'DRIVER' : 'PASSENGER', name, gender };
+
+      if (emailOtp) {
+        // --- EMAIL OTP VERIFICATION (CUSTOM) ---
+        if (otpCode !== emailOtp) {
+          throw new Error("Invalid OTP code.");
+        }
+        syncData.email = email;
+        syncData.method = 'email';
       } else {
-        navigation.navigate('DriverUpload', { phone, email });
+        // --- SMS OTP VERIFICATION (FIREBASE) ---
+        const credential = PhoneAuthProvider.credential(verificationId, otpCode);
+        const userCredential = await signInWithCredential(auth, credential);
+        idToken = await userCredential.user.getIdToken();
+        syncData.idToken = idToken;
+        syncData.method = 'firebase';
       }
-    } else {
-      navigation.navigate('MainTabs');
+
+      // 🚨 IMPORTANT: Change this to your local IP or 'localhost' if testing locally 🚨
+      // For now using the previous IP provided by the user
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/auth/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(syncData)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const userData = data.user; // { name, email, role, ... }
+        
+        // Save to Global Context
+        login({
+          id: userData?._id,
+          name: userData?.name || name || 'User',
+          email: userData?.email || email || '',
+          role: userData?.role || (isDriver ? 'DRIVER' : 'PASSENGER'),
+          gender: userData?.gender || gender || 'unspecified',
+          phoneNumber: userData?.phoneNumber || phone || '',
+          profilePhoto: userData?.profilePhoto || null,
+          vehicleInfo: userData?.vehicleInfo || null,
+        });
+
+        navigation.navigate(isDriver ? 'DriverTabs' : 'MainTabs', {
+          userId: userData?._id,
+          userName: userData?.name || name || 'User',
+          userEmail: userData?.email || email || '',
+          userRole: userData?.role || (isDriver ? 'DRIVER' : 'PASSENGER'),
+          gender: userData?.gender || gender || 'unspecified',
+        });
+      } else {
+        Alert.alert("Authentication Error", data.message || "Failed to sync with server.");
+      }
+
+    } catch (err) {
+      console.log(err);
+      Alert.alert("Verification Failed", err.message || "The code you entered is incorrect.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
-
-      {/* BACK BUTTON */}
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-      >
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <Ionicons name="arrow-back-outline" size={24} color={COLORS.primary} />
       </TouchableOpacity>
 
       <View style={styles.content}>
-
-        {/* ICON */}
         <View style={styles.iconContainer}>
           <Ionicons name="shield-checkmark-outline" size={48} color={COLORS.primary} />
         </View>
 
         <Text style={styles.title}>Verify Your Account</Text>
-        <Text style={styles.subtitle}>
-          We sent a 6-digit OTP to{'\n'}
-          <Text style={styles.highlight}>
-            {phone ? `+63 ${phone}` : email}
-          </Text>
-        </Text>
+        <Text style={styles.subtitle}>We sent a 6-digit OTP to{'\n'}<Text style={styles.highlight}>{phone}</Text></Text>
 
-        {/* OTP INPUTS */}
         <View style={styles.otpRow}>
           {otp.map((digit, index) => (
             <TextInput
@@ -80,32 +131,13 @@ export default function OTPScreen({ navigation, route }) {
           ))}
         </View>
 
-        {/* RESEND */}
-        <TouchableOpacity style={styles.resendButton}>
-          <Text style={styles.resendText}>
-            Didn't receive the code?{' '}
-            <Text style={styles.resendBold}>Resend OTP</Text>
-          </Text>
-        </TouchableOpacity>
-
-        {/* VERIFY BUTTON */}
         <TouchableOpacity
-          style={[
-            styles.verifyButton,
-            otp.every(d => d !== '') && styles.verifyButtonActive
-          ]}
+          style={[styles.verifyButton, otp.every(d => d !== '') && styles.verifyButtonActive]}
           onPress={handleVerify}
-          disabled={!otp.every(d => d !== '')}
+          disabled={!otp.every(d => d !== '') || loading}
         >
-          <Text style={styles.verifyButtonText}>Verify & Continue</Text>
-          <Ionicons name="checkmark-outline" size={20} color={COLORS.background} />
+          {loading ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.verifyButtonText}>Verify & Continue</Text>}
         </TouchableOpacity>
-
-        {/* NOTE */}
-        <Text style={styles.note}>
-          By continuing, you agree to our Terms of Service and Privacy Policy
-        </Text>
-
       </View>
     </View>
   );

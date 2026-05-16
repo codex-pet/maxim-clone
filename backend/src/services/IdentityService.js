@@ -1,83 +1,88 @@
-const jwt = require('jsonwebtoken');
+const admin = require('firebase-admin');
 const User = require('../models/User');
 
-// Mock OTP storage (In production, use Redis for expiration)
-const otpStore = new Map();
-
 class IdentityService {
-  /**
-   * Generates a random 6-digit OTP and "sends" it to the user.
-   */
-  static async requestOTP(phoneNumber) {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    // Store OTP with timestamp (valid for 5 mins)
-    otpStore.set(phoneNumber, {
-      otp: otp,
-      expiry: Date.now() + 5 * 60 * 1000
-    });
+  static async verifyAndSyncUser(idToken, role, name, gender) {
+    try {
+      // 1. Verify token with Firebase
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const { uid, phone_number } = decodedToken;
 
-    console.log(`[SMS MOCK] To: ${phoneNumber} | Message: Your Maxim-Clone verification code is: ${otp}`);
-    
-    // TODO: Integrate with real SMS Gateway (Twilio/GlobeLabs) here
-    return { success: true, message: 'OTP sent successfully' };
+      if (!phone_number) {
+        throw new Error("Phone number not found in token.");
+      }
+
+      // 2. Check if user exists in MongoDB
+      let user = await User.findOne({ firebaseUid: uid });
+
+      if (!user) {
+        // Create new user if they don't exist
+        user = new User({
+          firebaseUid: uid,
+          phoneNumber: phone_number,
+          name: name || '',
+          role: role || 'PASSENGER',
+          gender: gender || 'unspecified'
+        });
+        await user.save();
+        console.log(`✨ New User Registered: ${phone_number} (${name || 'No Name'})`);
+      } else {
+        // Update name if provided and not already set
+        if (name && !user.name) {
+          user.name = name;
+          await user.save();
+        }
+        console.log(`🔑 User Logged In: ${phone_number}`);
+      }
+
+      return user;
+    } catch (error) {
+      console.error("IdentityService Error:", error.message);
+      throw error;
+    }
   }
 
-  /**
-   * Verifies the OTP and returns a JWT if valid.
-   */
-  static async verifyOTP(phoneNumber, otp) {
-    const storedData = otpStore.get(phoneNumber);
+  static async syncEmailUser(email, role, name, gender) {
+    try {
+      let user = await User.findOne({ email });
 
-    if (!storedData) {
-      throw new Error('OTP not requested for this number');
+      if (!user) {
+        user = new User({
+          email,
+          name: name || '',
+          role: role || 'PASSENGER',
+          gender: gender || 'unspecified',
+          firebaseUid: `email-${Date.now()}-${Math.floor(Math.random() * 1000)}` 
+        });
+        await user.save();
+        console.log(`✨ New Email User Registered: ${email} (${name || 'No Name'})`);
+      } else {
+        let needsSave = false;
+        if (name && !user.name) {
+          user.name = name;
+          needsSave = true;
+        }
+        // Backfill firebaseUid for users created before the field was added
+        if (!user.firebaseUid) {
+          user.firebaseUid = `email-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+          needsSave = true;
+        }
+        if (needsSave) await user.save();
+        console.log(`🔑 Email User Logged In: ${email}`);
+      }
+      return user;
+    } catch (error) {
+      console.error("IdentityService Email Sync Error:", error.message);
+      throw error;
     }
-
-    if (Date.now() > storedData.expiry) {
-      otpStore.delete(phoneNumber);
-      throw new Error('OTP expired');
-    }
-
-    if (storedData.otp !== otp) {
-      throw new Error('Invalid OTP');
-    }
-
-    // OTP is valid - Find or Create user using Mongoose
-    let user = await User.findOne({ phoneNumber });
-
-    if (!user) {
-      // Create draft user with default values
-      user = await User.create({
-        phoneNumber,
-        role: 'PASSENGER'
-      });
-    }
-
-    // Clean up OTP store
-    otpStore.delete(phoneNumber);
-
-    // Generate JWT
-    const token = jwt.sign(
-      { userId: user._id, phoneNumber: user.phoneNumber, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    return { token, user };
+  }
+  static async findUserByEmail(email) {
+    return await User.findOne({ email });
   }
 
-  /**
-   * Updates user profile (FR 1.3 - Driver verification metadata)
-   */
-  static async updateProfile(userId, updates) {
-    // Using Mongoose findByIdAndUpdate for clean updates
-    const user = await User.findByIdAndUpdate(userId, updates, { new: true });
-    
-    if (!user) {
-      throw new Error('User not found');
-    }
-    
-    return user;
+  static async findUserByPhone(phoneNumber) {
+    // Also check for firebaseUid mapping if needed, but phone is indexed
+    return await User.findOne({ phoneNumber });
   }
 }
 

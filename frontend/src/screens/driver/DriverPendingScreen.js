@@ -77,6 +77,14 @@ export default function DriverPendingScreen({ navigation }) {
         <Text style={styles.backButtonText}>Back to Login</Text>
       </TouchableOpacity>
 
+      {/* DEV BYPASS */}
+      <TouchableOpacity
+        style={[styles.backButton, { backgroundColor: COLORS.primaryGreen, marginTop: 0 }]}
+        onPress={() => navigation.navigate('DriverTabs', { userId: 'dev-driver-id' })}
+      >
+        <Text style={styles.backButtonText}>Bypass Review (Dev Only)</Text>
+      </TouchableOpacity>
+
       <Text style={styles.contactText}>
         Need help?{' '}
         <Text style={styles.contactLink}>Contact Support</Text>

@@ -1,20 +1,72 @@
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Alert } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapPlaceholder from '../../components/MapPlaceholder';
+import LeafletMap from '../../components/LeafletMap';
 import SOSModal from '../../components/SOSModal';
 import { COLORS } from '../../constants/colors';
+
+// Import AuthContext to get driver info
+import { useAuth } from '../../context/AuthContext';
 
 const TIMER_SECONDS = 30;
 
 export default function DriverRideRequestScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { isLadiesOnly } = route.params || {};
+
+  // Get driver info
+  const { user } = useAuth();
+
+  const {
+    isLadiesOnly,
+    tripId,
+    pickupLocation,
+    dropoffLocation,
+    estimatedFare,
+    distance,
+    passengerId
+  } = route.params || {};
+
+  const passengerName = (passengerId?.name && passengerId.name.trim() !== '')
+    ? passengerId.name
+    : 'Passenger';
+
+  // Failsafe: Immediately auto-decline or hide the screen if the driver is MALE
+  useEffect(() => {
+    const driverGender = user?.gender?.toLowerCase() || '';
+    if (isLadiesOnly && driverGender !== 'female' && driverGender !== 'f') {
+      console.log('Blocked: Male driver received a Ladies-Only request. Auto-rejecting.');
+      navigation.goBack(); // Instantly removes the screen for male drivers
+    }
+  }, [isLadiesOnly, user]);
+
   const [sosVisible, setSosVisible] = useState(false);
   const [timeLeft, setTimeLeft] = useState(TIMER_SECONDS);
+  const [hasResponded, setHasResponded] = useState(false);
+  const [displayPickup, setDisplayPickup] = useState(route.params?.pickupLocation?.address || 'Detecting...');
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const resolveAddress = async () => {
+      if (displayPickup === 'Current Location' && route.params?.pickupLocation?.latitude) {
+        try {
+          const rev = await Location.reverseGeocodeAsync({
+            latitude: route.params.pickupLocation.latitude,
+            longitude: route.params.pickupLocation.longitude
+          });
+          if (rev && rev.length > 0) {
+            const item = rev[0];
+            const addr = `${item.name || ''} ${item.street || ''}, ${item.city || ''}`.trim().replace(/,$/, '');
+            if (addr) setDisplayPickup(addr);
+          }
+        } catch (e) { console.log('Resolve error:', e); }
+      }
+    };
+    resolveAddress();
+  }, [route.params?.pickupLocation]);
 
   // Pulse animation for incoming request banner
   useEffect(() => {
@@ -36,13 +88,14 @@ export default function DriverRideRequestScreen({ navigation, route }) {
 
   // Countdown timer
   useEffect(() => {
+    if (hasResponded) return; // Stop timer if action taken
     if (timeLeft <= 0) {
-      navigation.goBack();
+      handleDecline(); // Automatically decline if timer runs out
       return;
     }
     const timer = setTimeout(() => setTimeLeft(prev => prev - 1), 1000);
     return () => clearTimeout(timer);
-  }, [timeLeft]);
+  }, [timeLeft, hasResponded]);
 
   // Timer bar animation
   useEffect(() => {
@@ -53,19 +106,79 @@ export default function DriverRideRequestScreen({ navigation, route }) {
     }).start();
   }, []);
 
-  const handleAccept = () => {
-    navigation.navigate('DriverTabs');
+  const handleAccept = async () => {
+    if (hasResponded) return;
+    setHasResponded(true);
+
+    const acceptDriverId = route.params?.driverId || user?.id || '6578a1b2c3d4e5f60708090b';
+
+    if (!tripId) {
+      // If it's just a simulation without a real tripId, navigate back to home
+      navigation.navigate('DriverTabs', { screen: 'DriverHome' });
+      return;
+    }
+
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/trips/${tripId}/accept`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId: acceptDriverId })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        Alert.alert('Success', 'Ride accepted! Navigate to pickup point.');
+        navigation.replace('DriverActiveTrip', { tripId: result.trip._id });
+      } else {
+        // FIX: Handle "Already Taken" scenario by redirecting to Home Screen
+        Alert.alert(
+          'Ride Unavailable',
+          result.message || 'This ride has already been taken by another driver.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Navigate back to the Driver Dashboard (Home Screen)
+                navigation.navigate('DriverTabs', { screen: 'DriverHome' });
+              }
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Acceptance error:', error);
+      Alert.alert('Error', 'Could not connect to the server.');
+      setHasResponded(false); // Reset so they can try clicking again if it was a network drop
+    }
   };
 
-  const handleDecline = () => {
-    navigation.goBack();
+  const handleDecline = async () => {
+    if (hasResponded) return;
+    setHasResponded(true);
+
+    try {
+      // Notify passenger by setting status to Cancelled (Prototype logic)
+      await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/trips/${tripId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Cancelled' })
+      });
+      navigation.navigate('DriverTabs', {
+        screen: 'DriverHome',
+        params: { declinedTripId: tripId }
+      });
+    } catch (error) {
+      console.error('Decline error:', error);
+      navigation.goBack();
+    }
   };
 
   const timerColor = timeLeft > 15
     ? COLORS.primaryGreen
     : timeLeft > 5
-    ? COLORS.cta
-    : COLORS.danger;
+      ? COLORS.cta
+      : COLORS.danger;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.backgroundLight, paddingTop: insets.top }}>
@@ -129,10 +242,7 @@ export default function DriverRideRequestScreen({ navigation, route }) {
         {/* PASSENGER INFO */}
         <View style={styles.passengerCard}>
           <View style={styles.passengerLeft}>
-            <View style={[
-              styles.avatarContainer,
-              isLadiesOnly && styles.avatarContainerLadies
-            ]}>
+            <View style={styles.avatarContainer}>
               <Ionicons
                 name={isLadiesOnly ? 'female-outline' : 'person-outline'}
                 size={28}
@@ -140,7 +250,7 @@ export default function DriverRideRequestScreen({ navigation, route }) {
               />
             </View>
             <View>
-              <Text style={styles.passengerName}>Maria Santos</Text>
+              <Text style={styles.passengerName}>{passengerName}</Text>
               <View style={styles.ratingRow}>
                 <Ionicons name="star" size={14} color={COLORS.ctaYellow} />
                 <Text style={styles.ratingText}>4.8 • 124 trips</Text>
@@ -154,7 +264,14 @@ export default function DriverRideRequestScreen({ navigation, route }) {
 
         {/* MAP */}
         <View style={styles.mapContainer}>
-          <MapPlaceholder color={isLadiesOnly ? COLORS.ladiesOnly : null} />
+          {pickupLocation && dropoffLocation ? (
+            <LeafletMap
+              pickup={{ lat: pickupLocation.latitude, lng: pickupLocation.longitude }}
+              destination={{ lat: dropoffLocation.latitude, lng: dropoffLocation.longitude }}
+            />
+          ) : (
+            <MapPlaceholder color={isLadiesOnly ? COLORS.ladiesOnly : null} />
+          )}
         </View>
 
         {/* TRIP DETAILS */}
@@ -170,11 +287,11 @@ export default function DriverRideRequestScreen({ navigation, route }) {
             <View style={styles.tripLocations}>
               <View style={styles.tripLocation}>
                 <Text style={styles.tripLocationLabel}>Pickup</Text>
-                <Text style={styles.tripLocationText}>Ateneo de Davao University</Text>
+                <Text style={styles.tripLocationText}>{displayPickup}</Text>
               </View>
               <View style={styles.tripLocation}>
                 <Text style={styles.tripLocationLabel}>Destination</Text>
-                <Text style={styles.tripLocationText}>SM Lanang Premier</Text>
+                <Text style={styles.tripLocationText}>{dropoffLocation?.address || 'Not set'}</Text>
               </View>
             </View>
           </View>
@@ -182,16 +299,16 @@ export default function DriverRideRequestScreen({ navigation, route }) {
           <View style={styles.tripStatsRow}>
             <View style={styles.tripStat}>
               <Ionicons name="navigate-outline" size={16} color={COLORS.textSecondary} />
-              <Text style={styles.tripStatText}>4.2 km</Text>
+              <Text style={styles.tripStatText}>{distance ? distance.toFixed(1) : '0.0'} km</Text>
             </View>
             <View style={styles.tripStat}>
               <Ionicons name="time-outline" size={16} color={COLORS.textSecondary} />
-              <Text style={styles.tripStatText}>~12 mins</Text>
+              <Text style={styles.tripStatText}>~{distance ? Math.round(distance * 3) : '??'} mins</Text>
             </View>
             <View style={styles.tripStat}>
               <Ionicons name="cash-outline" size={16} color={COLORS.primaryGreen} />
               <Text style={[styles.tripStatText, { color: COLORS.primaryGreen, fontWeight: 'bold' }]}>
-                ₱ {isLadiesOnly ? '100' : '90'}
+                ₱ {estimatedFare || (isLadiesOnly ? '100' : '90')}
               </Text>
             </View>
           </View>
@@ -380,6 +497,9 @@ const styles = StyleSheet.create({
   mapContainer: {
     alignItems: 'center',
     marginBottom: 16,
+    height: 300,
+    width: '100%',
+    paddingHorizontal: 16,
   },
   tripCard: {
     backgroundColor: COLORS.background,

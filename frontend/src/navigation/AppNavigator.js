@@ -8,6 +8,10 @@ import DriverUploadScreen from '../screens/driver/DriverUploadScreen';
 import DriverPendingScreen from '../screens/driver/DriverPendingScreen';
 import DriverAuthScreen from '../screens/driver/DriverAuthScreen';
 import DriverRideRequestScreen from '../screens/driver/DriverRideRequestScreen';
+import ActiveTripScreen from '../screens/passenger/ActiveTripScreen';
+import DriverActiveTripScreen from '../screens/driver/DriverActiveTripScreen';
+import TripHistoryScreen from '../screens/passenger/TripHistoryScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -26,6 +30,10 @@ export default function AppNavigator() {
       <Stack.Screen name="DriverPending" component={DriverPendingScreen} />
       <Stack.Screen name="DriverTabs" component={DriverTabs} />
       <Stack.Screen name="DriverRideRequest" component={DriverRideRequestScreen} />
+      <Stack.Screen name="ActiveTrip" component={ActiveTripScreen} />
+      <Stack.Screen name="DriverActiveTrip" component={DriverActiveTripScreen} />
+      <Stack.Screen name="TripHistory" component={TripHistoryScreen} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
     </Stack.Navigator>
   );
 }

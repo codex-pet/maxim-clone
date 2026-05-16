@@ -1,11 +1,18 @@
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
 import { useState, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import SOSModal from './SOSModal';
 
-export default function Header() {
+export default function Header({ userName, userEmail }) {
+  const { user, logout: authLogout } = useAuth();
+  
+  // Use context if props are missing
+  const displayName = userName || user?.name || 'Guest User';
+  const displayEmail = userEmail || user?.email || 'Not logged in';
+
   const [sosVisible, setSosVisible] = useState(false);
   const [profileVisible, setProfileVisible] = useState(false);
   const navigation = useNavigation();
@@ -73,7 +80,14 @@ export default function Header() {
           style={styles.container}
           onPress={openProfile}
         >
-          <Ionicons name="person-outline" size={24} color={COLORS.primary} />
+          {user?.profilePhoto ? (
+            <Image 
+              source={{ uri: user.profilePhoto }} 
+              style={{ width: 24, height: 24, borderRadius: 12 }} 
+            />
+          ) : (
+            <Ionicons name="person-outline" size={24} color={COLORS.primary} />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -102,24 +116,43 @@ export default function Header() {
             {/* PROFILE INFO */}
             <View style={styles.profileHeader}>
               <View style={styles.avatarContainer}>
-                <Ionicons name="person-outline" size={36} color={COLORS.primary} />
+                {user?.profilePhoto ? (
+                  <Image 
+                    source={{ uri: user.profilePhoto }} 
+                    style={{ width: 64, height: 64, borderRadius: 32 }} 
+                  />
+                ) : (
+                  <Ionicons name="person-outline" size={36} color={COLORS.primary} />
+                )}
               </View>
               <View>
-                <Text style={styles.profileName}>Guest User</Text>
-                <Text style={styles.profileEmail}>Not logged in</Text>
+                <Text style={styles.profileName}>{displayName}</Text>
+                <Text style={styles.profileEmail}>{displayEmail}</Text>
               </View>
             </View>
 
             <View style={styles.divider} />
 
             {/* MENU ITEMS */}
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                closeProfile();
+                navigation.navigate('EditProfile');
+              }}
+            >
               <Ionicons name="person-outline" size={22} color={COLORS.primary} />
               <Text style={styles.menuItemText}>Edit Profile</Text>
               <Ionicons name="chevron-forward-outline" size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                closeProfile();
+                navigation.navigate('TripHistory');
+              }}
+            >
               <Ionicons name="time-outline" size={22} color={COLORS.primary} />
               <Text style={styles.menuItemText}>Trip History</Text>
               <Ionicons name="chevron-forward-outline" size={18} color={COLORS.textSecondary} />
@@ -136,7 +169,10 @@ export default function Header() {
             {/* LOGOUT */}
             <TouchableOpacity
               style={styles.logoutButton}
-              onPress={handleLogout}
+              onPress={() => {
+                authLogout();
+                handleLogout();
+              }}
             >
               <Ionicons name="log-out-outline" size={22} color={COLORS.danger} />
               <Text style={styles.logoutText}>Logout</Text>

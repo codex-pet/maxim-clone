@@ -1,57 +1,231 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
-import { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Modal, Animated } from 'react-native';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import * as Location from 'expo-location';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapPlaceholder from '../../components/MapPlaceholder';
+import LeafletMap from '../../components/LeafletMap';
+import Header from '../../components/Header';
 import SOSModal from '../../components/SOSModal';
 import { COLORS } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
 
 export default function DriverHomeScreen({ navigation, route }) {
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const { gender } = route.params || {};
-  const isFemaleDriver = gender === 'female';
+  const { gender, userName, userEmail } = route.params || {};
+  const driverName = user?.name || userName || 'Driver';
+
+  // Gets the driver's gender to pass to the backend
+  const driverGender = user?.gender || gender || '';
+  const isFemaleDriver = driverGender.toLowerCase() === 'female' || driverGender.toLowerCase() === 'f';
+
   const [isOnline, setIsOnline] = useState(false);
   const [sosVisible, setSosVisible] = useState(false);
+  const [profileVisible, setProfileVisible] = useState(false);
+  const [declinedTripIds, setDeclinedTripIds] = useState([]); // Keep track of ignored trips
+  const lastNavigatedTripId = useRef(null); // Prevent duplicate navigations
+  const [stats, setStats] = useState({ tripsCount: 0, earningsToday: 0, rating: 4.8 });
+  const [recentTripsData, setRecentTripsData] = useState([]);
 
-  const recentTrips = [
-    { id: 1, passenger: 'Juan Dela Cruz', from: 'Ateneo de Davao', to: 'SM Lanang', fare: '₱ 85', date: 'Today, 9:30 AM' },
-    { id: 2, passenger: 'Maria Santos', from: 'Damosa Gateway', to: 'Matina Town Square', fare: '₱ 110', date: 'Today, 8:15 AM' },
-    { id: 3, passenger: 'Pedro Reyes', from: 'NCCC Mall', to: 'Buhangin', fare: '₱ 95', date: 'Yesterday, 5:45 PM' },
-  ];
+  useEffect(() => {
+    if (route.params?.declinedTripId) {
+      const tripId = route.params.declinedTripId;
+      if (!declinedTripIds.includes(tripId)) {
+        setDeclinedTripIds(prev => [...prev, tripId]);
+        console.log('[TEST LOG] Trip added to declined list:', tripId);
+      }
+    }
+  }, [route.params?.declinedTripId]);
+
+  const fetchDriverSummary = useCallback(async () => {
+    try {
+      const driverId = route.params?.userId || user?.id;
+      if (!driverId) return;
+
+      console.log('[TEST LOG] Fetching driver summary for:', driverId);
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/trips/driver-summary/${driverId}`);
+      const result = await response.json();
+      if (result.success) {
+        setStats(result.stats);
+
+        // Resolve "Current Location" to real address if needed
+        const processed = await Promise.all(result.recentTrips.map(async (t) => {
+          if (t.from === 'Current Location' && t.fromCoords?.latitude) {
+            try {
+              const rev = await Location.reverseGeocodeAsync({
+                latitude: t.fromCoords.latitude,
+                longitude: t.fromCoords.longitude
+              });
+              if (rev && rev.length > 0) {
+                const item = rev[0];
+                const addr = `${item.name || ''} ${item.street || ''}, ${item.city || ''}`.trim().replace(/,$/, '');
+                return { ...t, from: addr || 'Current Location' };
+              }
+            } catch (e) { /* ignore */ }
+          }
+          return t;
+        }));
+
+        setRecentTripsData(processed);
+      }
+    } catch (error) {
+      console.error('[TEST LOG] Error fetching driver summary:', error);
+    }
+  }, [route.params?.userId, user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchDriverSummary();
+    }, [fetchDriverSummary])
+  );
+
+  // Polling for pending trips only when screen is focused and online
+  useFocusEffect(
+    useCallback(() => {
+      let pollInterval;
+      if (isOnline) {
+        console.log('[TEST LOG] Driver Home Focused & Online. Starting poll...');
+        pollInterval = setInterval(async () => {
+          try {
+            // FIX: Pass driverGender to the backend to filter Ladies-Only rides automatically
+            const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/trips/latest-pending?driverGender=${driverGender}`);
+            const result = await response.json();
+
+            console.log('[DRIVER POLL] Polling for pending trips... Response:', result);
+
+            if (result.success && result.trip) {
+              // Skip if already declined, or if we just navigated to this trip
+              if (declinedTripIds.includes(result.trip._id) || lastNavigatedTripId.current === result.trip._id) {
+                return;
+              }
+
+              console.log('[TEST LOG] New Pending Trip Found:', result.trip._id);
+              lastNavigatedTripId.current = result.trip._id;
+
+              // Navigate to request screen with real data
+              navigation.navigate('DriverRideRequest', {
+                isLadiesOnly: result.trip.rideType === 'Ladies-Only',
+                tripId: result.trip._id,
+                driverId: route.params?.userId || user?.id,
+                pickupLocation: result.trip.pickupLocation,
+                dropoffLocation: result.trip.dropoffLocation,
+                estimatedFare: result.trip.estimatedFare,
+                distance: result.trip.distance,
+                passengerId: result.trip.passengerId
+              });
+            }
+          } catch (error) {
+            console.error('[TEST LOG] Polling error:', error);
+          }
+        }, 5000);
+      }
+
+      return () => {
+        if (pollInterval) {
+          console.log('[TEST LOG] Driver Home Unfocused or Offline. Stopping poll.');
+          clearInterval(pollInterval);
+        }
+      };
+    }, [isOnline, declinedTripIds, driverGender])
+  );
+
+  // Prototype: Update driver status in backend
+  const toggleOnline = async (val) => {
+    setIsOnline(val);
+    try {
+      await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/trips/driver-status/${route.params?.userId || 'mock-id'}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: val ? 'Online' : 'Offline' })
+      });
+    } catch (e) {
+      console.log('Status update error (expected in prototype without real ID):', e.message);
+    }
+  };
+
+  const overlayAnim = useRef(new Animated.Value(0)).current;
+  const modalAnim = useRef(new Animated.Value(300)).current;
+
+  const openProfile = () => {
+    setProfileVisible(true);
+    Animated.parallel([
+      Animated.timing(overlayAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(modalAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        bounciness: 4,
+      }),
+    ]).start();
+  };
+
+  const closeProfile = () => {
+    Animated.parallel([
+      Animated.timing(overlayAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(modalAnim, {
+        toValue: 300,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setProfileVisible(false));
+  };
+
+  const handleLogout = () => {
+    closeProfile();
+    setTimeout(() => {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Auth' }],
+      });
+    }, 300);
+  };
+
+  const simulateRequest = async (isLadiesOnly) => {
+    try {
+      // FIX: Also update the simulation fetch to include driverGender
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/trips/latest-pending?driverGender=${driverGender}`);
+      const result = await response.json();
+
+      if (result.success && result.trip) {
+        navigation.navigate('DriverRideRequest', {
+          isLadiesOnly: result.trip.rideType === 'Ladies-Only',
+          tripId: result.trip._id,
+          driverId: route.params?.userId
+        });
+      } else {
+        // Fallback to simple simulation if no trip found
+        navigation.navigate('DriverRideRequest', { isLadiesOnly });
+      }
+    } catch (error) {
+      navigation.navigate('DriverRideRequest', { isLadiesOnly });
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.backgroundLight, paddingTop: insets.top }}>
 
-      {/* DRIVER HEADER */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.avatarContainer}>
-            <Ionicons name="person-outline" size={24} color={COLORS.background} />
-          </View>
-          <View>
-            <Text style={styles.driverName}>Erl Yves</Text>
-            <View style={styles.statusRow}>
-              <View style={[styles.statusDot, { backgroundColor: isOnline ? COLORS.primaryGreen : COLORS.danger }]} />
-              <Text style={styles.statusText}>{isOnline ? 'Online' : 'Offline'}</Text>
-            </View>
-          </View>
-        </View>
+      {/* SHARED HEADER */}
+      <Header userName={driverName} userEmail={user?.email || userEmail} />
 
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.sosButton}
-            onPress={() => setSosVisible(true)}
-          >
-            <Text style={styles.sosText}>SOS</Text>
-          </TouchableOpacity>
-          <Switch
-            value={isOnline}
-            onValueChange={setIsOnline}
-            trackColor={{ false: COLORS.border, true: COLORS.primaryGreen }}
-            thumbColor={COLORS.background}
-          />
-        </View>
-      </View>
+      {/* ONLINE STATUS BANNER (MATCHES PASSENGER OFFLINE BANNER STYLE) */}
+      <TouchableOpacity
+        style={[styles.statusBanner, { backgroundColor: isOnline ? COLORS.primaryGreen : COLORS.danger }]}
+        onPress={() => toggleOnline(!isOnline)}
+      >
+        <Ionicons name={isOnline ? "radio-outline" : "power-outline"} size={16} color={COLORS.background} />
+        <Text style={styles.statusBannerText}>
+          {isOnline ? 'You are ONLINE — Ready for requests' : 'You are OFFLINE — Tap to go Online'}
+        </Text>
+      </TouchableOpacity>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
 
@@ -86,7 +260,7 @@ export default function DriverHomeScreen({ navigation, route }) {
           </View>
           <TouchableOpacity
             style={[styles.toggleButton, { backgroundColor: isOnline ? COLORS.primaryGreen : COLORS.primary }]}
-            onPress={() => setIsOnline(!isOnline)}
+            onPress={() => toggleOnline(!isOnline)}
           >
             <Text style={styles.toggleButtonText}>
               {isOnline ? 'Go Offline' : 'Go Online'}
@@ -98,7 +272,7 @@ export default function DriverHomeScreen({ navigation, route }) {
         {isOnline && (
           <TouchableOpacity
             style={styles.testRequestButton}
-            onPress={() => navigation.navigate('DriverRideRequest', { isLadiesOnly: false })}
+            onPress={() => simulateRequest(false)}
           >
             <Ionicons name="notifications-outline" size={16} color={COLORS.background} />
             <Text style={styles.testRequestText}>Simulate Ride Request</Text>
@@ -109,33 +283,33 @@ export default function DriverHomeScreen({ navigation, route }) {
         {isOnline && isFemaleDriver && (
           <TouchableOpacity
             style={[styles.testRequestButton, { backgroundColor: COLORS.ladiesOnly }]}
-            onPress={() => navigation.navigate('DriverRideRequest', { isLadiesOnly: true })}
+            onPress={() => simulateRequest(true)}
           >
             <Ionicons name="female-outline" size={16} color={COLORS.background} />
             <Text style={styles.testRequestText}>Simulate Ladies-Only Request</Text>
           </TouchableOpacity>
         )}
 
-        {/* MAP */}
+        {/* MAP (PROTOTYPE) */}
         <View style={styles.mapContainer}>
-          <MapPlaceholder />
+          <LeafletMap />
         </View>
 
         {/* STATS ROW */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Ionicons name="car-outline" size={24} color={COLORS.primary} />
-            <Text style={styles.statValue}>12</Text>
+            <Text style={styles.statValue}>{stats.tripsCount}</Text>
             <Text style={styles.statLabel}>Trips Today</Text>
           </View>
           <View style={styles.statCard}>
             <Ionicons name="cash-outline" size={24} color={COLORS.primaryGreen} />
-            <Text style={styles.statValue}>₱ 1,240</Text>
+            <Text style={styles.statValue}>₱ {stats.earningsToday.toLocaleString()}</Text>
             <Text style={styles.statLabel}>Earnings Today</Text>
           </View>
           <View style={styles.statCard}>
             <Ionicons name="star-outline" size={24} color={COLORS.ctaYellow} />
-            <Text style={styles.statValue}>4.8</Text>
+            <Text style={styles.statValue}>{stats.rating}</Text>
             <Text style={styles.statLabel}>Rating</Text>
           </View>
         </View>
@@ -143,21 +317,56 @@ export default function DriverHomeScreen({ navigation, route }) {
         {/* RECENT TRIPS */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Trips</Text>
-          {recentTrips.map(trip => (
-            <View key={trip.id} style={styles.tripCard}>
-              <View style={styles.tripLeft}>
-                <View style={styles.tripIconContainer}>
-                  <Ionicons name="car-outline" size={20} color={COLORS.primary} />
+          {recentTripsData.length > 0 ? (
+            recentTripsData.map(trip => (
+              <View key={trip.id} style={styles.tripCard}>
+                <View style={styles.tripLeft}>
+                  <View style={styles.tripIconContainer}>
+                    <Ionicons name="car-outline" size={20} color={COLORS.primary} />
+                  </View>
+                  <View style={styles.tripInfo}>
+                    <View style={styles.tripHeaderRow}>
+                      <Text style={styles.tripPassenger} numberOfLines={1}>
+                        {trip.passenger}
+                      </Text>
+                      {trip.bookingMethod === 'SMS_LITE_MODE' && (
+                        <View style={styles.liteModeBadge}>
+                          <Text style={styles.liteModeBadgeText}>LITE</Text>
+                        </View>
+                      )}
+                      {trip.rideType === 'Ladies-Only' && (
+                        <View style={styles.ladiesOnlyBadge}>
+                          <Ionicons name="female" size={10} color={COLORS.ladiesOnly} />
+                          <Text style={styles.ladiesOnlyBadgeText}>Ladies</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.tripRoute} numberOfLines={1}>{trip.from}</Text>
+                    <Text style={styles.tripRoute} numberOfLines={1}>→ {trip.to}</Text>
+                    <Text style={styles.tripDate}>{trip.date}</Text>
+                  </View>
                 </View>
-                <View style={styles.tripInfo}>
-                  <Text style={styles.tripPassenger}>{trip.passenger}</Text>
-                  <Text style={styles.tripRoute}>{trip.from} → {trip.to}</Text>
-                  <Text style={styles.tripDate}>{trip.date}</Text>
+                <View style={styles.tripRight}>
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: trip.status === 'Completed' ? '#E8F5E9' : '#FFEBEE' }
+                  ]}>
+                    <Text style={[
+                      styles.statusBadgeText,
+                      { color: trip.status === 'Completed' ? COLORS.primaryGreen : COLORS.danger }
+                    ]}>
+                      {trip.status}
+                    </Text>
+                  </View>
+                  <Text style={styles.tripFare}>{trip.fare}</Text>
                 </View>
               </View>
-              <Text style={styles.tripFare}>{trip.fare}</Text>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No recent trips found</Text>
             </View>
-          ))}
+          )}
         </View>
 
       </ScrollView>
@@ -167,11 +376,86 @@ export default function DriverHomeScreen({ navigation, route }) {
         onClose={() => setSosVisible(false)}
       />
 
+      {/* PROFILE MODAL */}
+      <Modal
+        visible={profileVisible}
+        transparent
+        animationType="none"
+        onRequestClose={closeProfile}
+      >
+        <Animated.View style={[styles.modalContainer, { opacity: overlayAnim }]}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={closeProfile}
+          />
+          <Animated.View style={[styles.modalContent, { transform: [{ translateY: modalAnim }] }]}>
+            <View style={styles.modalHandle} />
+
+            {/* PROFILE INFO */}
+            <View style={styles.profileHeader}>
+              <View style={styles.avatarContainerModal}>
+                <Ionicons name="person-outline" size={36} color={COLORS.primary} />
+              </View>
+              <View>
+                <Text style={styles.profileName}>{driverName}</Text>
+                <Text style={styles.profileEmail}>{userEmail || 'Driver Account'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* MENU ITEMS */}
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="person-outline" size={22} color={COLORS.primary} />
+              <Text style={styles.menuItemText}>Edit Profile</Text>
+              <Ionicons name="chevron-forward-outline" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="time-outline" size={22} color={COLORS.primary} />
+              <Text style={styles.menuItemText}>Trip History</Text>
+              <Ionicons name="chevron-forward-outline" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="settings-outline" size={22} color={COLORS.primary} />
+              <Text style={styles.menuItemText}>Settings</Text>
+              <Ionicons name="chevron-forward-outline" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* LOGOUT */}
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={22} color={COLORS.danger} />
+              <Text style={styles.logoutText}>Logout</Text>
+            </TouchableOpacity>
+
+          </Animated.View>
+        </Animated.View>
+      </Modal>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  statusBannerText: {
+    color: COLORS.background,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -366,24 +650,166 @@ const styles = StyleSheet.create({
   tripInfo: {
     flex: 1,
   },
+  tripHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 10,
+  },
   tripPassenger: {
     fontSize: 14,
     fontWeight: 'bold',
     color: COLORS.text,
+    flexShrink: 1,
   },
   tripRoute: {
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 2,
+    paddingRight: 8,
   },
   tripDate: {
     fontSize: 11,
     color: COLORS.textSecondary,
-    marginTop: 2,
+    marginTop: 4,
   },
   tripFare: {
     fontSize: 15,
     fontWeight: 'bold',
     color: COLORS.primaryGreen,
+  },
+  tripRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 8,
+    minWidth: 70,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  liteModeBadge: {
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: COLORS.danger,
+  },
+  liteModeBadgeText: {
+    fontSize: 9,
+    color: COLORS.danger,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  ladiesOnlyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFE4E6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 2,
+  },
+  ladiesOnlyBadgeText: {
+    fontSize: 9,
+    color: COLORS.ladiesOnly,
+    fontWeight: 'bold',
+  },
+  emptyState: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+  },
+  emptyStateText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalOverlay: {
+    flex: 1,
+  },
+  modalContent: {
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 16,
+  },
+  avatarContainerModal: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.backgroundLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.border,
+  },
+  profileName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  profileEmail: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 12,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+  },
+  menuItemText: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.text,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+  },
+  logoutText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: COLORS.danger,
   },
 });

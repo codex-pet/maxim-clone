@@ -12,6 +12,7 @@ const initDb = async () => {
     });
     
     console.log(`Successfully connected to MongoDB: ${conn.connection.host}`);
+    console.log(`Using Database: ${conn.connection.name}`);
     return conn;
   } catch (err) {
     console.error('Error connecting to MongoDB:', err.message);

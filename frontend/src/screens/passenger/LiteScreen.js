@@ -1,9 +1,22 @@
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Dimensions, } from 'react-native';
-import Header from '../../components/Header';
-import { useRef, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
+  ScrollView,
+  Dimensions,
+  Alert
+} from 'react-native';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as SMS from 'expo-sms';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import Header from '../../components/Header';
+import { useAuth } from '../../context/AuthContext';
 import GPSCard from '../../components/GPSCard';
 import LocationInput from '../../components/LocationInput';
 import BookingStatusItem from '../../components/BookingStatusItem';
@@ -14,18 +27,66 @@ import { COLORS } from '../../constants/colors';
 const { height } = Dimensions.get('window');
 const HEADER_SPACE = height * 0.35;
 
-export default function LiteScreen() {
+export default function LiteScreen({ route }) {
+  const { user } = useAuth();
+  const userName = user?.name || route?.params?.userName || route?.params?.params?.userName || 'User';
+  const userEmail = user?.email || route?.params?.userEmail || route?.params?.params?.userEmail || '';
   const insets = useSafeAreaInsets();
+
   const { location } = useLocation();
   const { isConnected } = useNetworkStatus();
+
   const [destination, setDestination] = useState('');
-  const [pickup, setPickup] = useState('Potol, Dapitan City');
+  const [pickup, setPickup] = useState('Fetching location...');
   const [panelVisible, setPanelVisible] = useState(false);
+
+  // NEW: State for Ride Type
+  const [rideType, setRideType] = useState('Standard'); // 'Standard' or 'Ladies Mode'
 
   const scrollRef = useRef(null);
   const confirmAnim = useRef(new Animated.Value(600)).current;
   const slideAnim = useRef(new Animated.Value(height)).current;
 
+  // 1. CACHE LAST KNOWN ADDRESS (Leaflet + OpenStreetMap Photon API with Debounce)
+  useEffect(() => {
+    const cacheLocation = async () => {
+      if (isConnected && location) {
+        try {
+          const url = `https://photon.komoot.io/reverse?lon=${location.coords.longitude}&lat=${location.coords.latitude}`;
+          const response = await fetch(url);
+          const data = await response.json();
+
+          if (data.features && data.features.length > 0) {
+            const props = data.features[0].properties;
+            const addressName = props.name || props.street || '';
+            const city = props.city || props.state || '';
+            const finalAddress = [addressName, city].filter(Boolean).join(', ');
+
+            if (finalAddress) {
+              await AsyncStorage.setItem('lastKnownPickup', finalAddress);
+              setPickup(finalAddress);
+            }
+          }
+        } catch (error) {
+          console.log("Error fetching reverse geocode:", error);
+        }
+      } else if (!isConnected) {
+        // If offline, pull the saved address
+        const savedAddress = await AsyncStorage.getItem('lastKnownPickup');
+        if (savedAddress) {
+          setPickup(savedAddress);
+        } else {
+          setPickup('Potol, Dapitan City'); // Fallback
+        }
+      }
+    };
+
+    // Debounce to prevent spamming the free Photon API
+    const timeoutId = setTimeout(cacheLocation, 3000);
+    return () => clearTimeout(timeoutId);
+  }, [location, isConnected]);
+
+  // Handle Sheet Animations
   useFocusEffect(
     useCallback(() => {
       setTimeout(() => {
@@ -58,17 +119,50 @@ export default function LiteScreen() {
     }).start(() => setPanelVisible(false));
   };
 
-  const smsPreview = `From: ${pickup}
-GPS: ${location ? `${location.coords.latitude.toFixed(4)}N, ${location.coords.longitude.toFixed(2)}E` : 'Fetching...'}
-To: ${destination || '(Destination)'}
-Type: Standard
-Passenger Name: Erl Yves`;
+  // 2. FORMAT AND SEND THE SMS BOOKING
+  const handleSendBooking = async () => {
+    const isAvailable = await SMS.isAvailableAsync();
+
+    if (isAvailable) {
+      const lat = location?.coords?.latitude?.toFixed(4) || 'Unknown';
+      const lng = location?.coords?.longitude?.toFixed(4) || 'Unknown';
+
+      // Ensure this matches the regex in your Node.js Backend exactly!
+      const message = `New Ride Request:
+        Passenger: ${userName}
+        Pickup: ${pickup}
+        Destination: ${destination || 'Any'}
+        Contact: ${user?.phoneNumber || '09123456789'}
+        Type: ${rideType}
+        GPS: ${lat}N, ${lng}E`;
+
+      // 🚨 REPLACE THIS WITH THE SIM NUMBER OF YOUR SPARE ANDROID PHONE
+      const GATEWAY_SIM_NUMBER = '+639357708642';
+
+      const { result } = await SMS.sendSMSAsync(
+        [GATEWAY_SIM_NUMBER],
+        message
+      );
+
+      // 'sent' for iOS, 'unknown' is typical for Android but means it successfully opened the SMS app
+      if (result === 'sent' || result === 'unknown') {
+        showPanel();
+      }
+    } else {
+      Alert.alert('Error', 'SMS is not available on this device.');
+    }
+  };
+
+  // Preview string for the UI (dynamically uses rideType)
+  const latString = location?.coords?.latitude?.toFixed(4) || 'Unknown';
+  const lngString = location?.coords?.longitude?.toFixed(2) || 'Unknown';
+  const smsPreview = `New Ride Request:\nPassenger: ${userName}\nPickup: ${pickup}\nDestination: ${destination || '(Any)'}\nContact: ${user?.phoneNumber || '09123456789'}\nType: ${rideType}\nGPS: ${latString}N, ${lngString}E`;
 
   return (
     <View style={styles.container}>
 
       <View style={[styles.headerWrapper, { paddingTop: insets.top }]}>
-        <Header />
+        <Header userName={userName} userEmail={userEmail} />
       </View>
 
       <Animated.View style={[styles.animatedSheet, { transform: [{ translateY: slideAnim }] }]}>
@@ -115,8 +209,8 @@ Passenger Name: Erl Yves`;
 
               <Text style={styles.sectionTitle}>Your Location</Text>
               <GPSCard
-                latitude={location?.coords.latitude}
-                longitude={location?.coords.longitude}
+                latitude={location?.coords?.latitude}
+                longitude={location?.coords?.longitude}
                 locked={!!location}
               />
 
@@ -138,6 +232,27 @@ Passenger Name: Erl Yves`;
               </View>
 
               <Text style={styles.sectionTitle}>SMS Booking Preview</Text>
+
+              {/* NEW: Ride Type Toggle Buttons */}
+              <View style={styles.typeToggleContainer}>
+                <TouchableOpacity
+                  style={[styles.typeButton, rideType === 'Standard' && styles.typeButtonActive]}
+                  onPress={() => setRideType('Standard')}
+                >
+                  <Text style={[styles.typeButtonText, rideType === 'Standard' && styles.typeButtonTextActive]}>
+                    Standard
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.typeButton, rideType === 'Ladies Mode' && styles.typeButtonActive]}
+                  onPress={() => setRideType('Ladies Mode')}
+                >
+                  <Text style={[styles.typeButtonText, rideType === 'Ladies Mode' && styles.typeButtonTextActive]}>
+                    Ladies Mode
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
               <View style={styles.smsCard}>
                 <Text style={styles.smsTitle}>Auto Generated SMS</Text>
                 <Text style={styles.smsText}>{smsPreview}</Text>
@@ -148,8 +263,8 @@ Passenger Name: Erl Yves`;
                 <BookingStatusItem
                   icon="location-outline"
                   iconBackground={COLORS.primaryGreen}
-                  title="GPS Location Captured"
-                  subtitle={location ? `${location.coords.latitude.toFixed(4)}N, ${location.coords.longitude.toFixed(2)}E` : 'Fetching...'}
+                  title="GPS Location Cached"
+                  subtitle={location ? `${latString}N, ${lngString}E` : 'Fetching...'}
                 />
                 <BookingStatusItem
                   icon="phone-portrait-outline"
@@ -171,7 +286,8 @@ Passenger Name: Erl Yves`;
                 />
               </View>
 
-              <TouchableOpacity style={styles.sendButton} onPress={showPanel}>
+              {/* 3. UPDATED BUTTON EVENT */}
+              <TouchableOpacity style={styles.sendButton} onPress={handleSendBooking}>
                 <Text style={styles.sendButtonText}>SEND BOOKING</Text>
               </TouchableOpacity>
               <Text style={styles.noInternet}>No internet needed</Text>
@@ -199,7 +315,7 @@ Passenger Name: Erl Yves`;
               icon="checkmark-circle-outline"
               iconBackground={COLORS.primaryGreen}
               title="GPS Location Captured"
-              subtitle={location ? `${location.coords.latitude.toFixed(4)}N, ${location.coords.longitude.toFixed(2)}E` : 'Fetching...'}
+              subtitle={location ? `${latString}N, ${lngString}E` : 'Fetching...'}
             />
             <BookingStatusItem
               icon="phone-portrait-outline"
@@ -238,7 +354,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: COLORS.backgroundLight,
-    zIndex: 1,
+    zIndex: 100,
   },
   animatedSheet: {
     flex: 1,
@@ -346,6 +462,35 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.border,
     marginVertical: 8,
   },
+
+  // NEW: Type Toggle Buttons Styling
+  typeToggleContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  typeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+  },
+  typeButtonActive: {
+    backgroundColor: COLORS.cta,
+    borderColor: COLORS.cta,
+  },
+  typeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  typeButtonTextActive: {
+    color: COLORS.background,
+  },
+
   smsCard: {
     backgroundColor: COLORS.background,
     borderRadius: 12,

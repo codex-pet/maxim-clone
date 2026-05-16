@@ -33,3 +33,6 @@ yarn-error.log*
 
 # Mac
 .DS_Store
+
+# firebase
+backend/src/config/serviceAccountKey.json
