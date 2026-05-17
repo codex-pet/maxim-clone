@@ -4,131 +4,116 @@ const admin = require('firebase-admin');
 const mongoose = require('mongoose');
 const Trip = require('../models/Trip');
 
-/**
- * Helper: Calculates distance in KM between two coordinates
- */
+// Haversine helper to calculate distance based on coordinates
 function calculateDistanceKm(lat1, lon1, lat2, lon2) {
-    if (!lat1 || !lon1 || !lat2 || !lon2 || lat1 === 0 || lat2 === 0) return 0;
+    if (!lat1 || !lon1 || !lat2 || !lon2 || lat1 === 0) return 0;
     const R = 6371;
     const dLat = (lat2 - lat1) * (Math.PI / 180);
     const dLon = (lon2 - lon1) * (Math.PI / 180);
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
         Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-/**
- * Webhook handler for Lite Mode (SMS)
- */
-router.post('/webhook', async (req, res) => {
-    console.log("📥 Incoming SMS Webhook...");
+// FIX: Changed from router.post to router.all to catch Macrodroid regardless of method
+router.all('/webhook', async (req, res) => {
+    // FIX: Force Macrodroid & Ngrok to close the socket immediately to prevent freezing
+    res.set('Connection', 'close');
+    res.set('ngrok-skip-browser-warning', 'true');
 
-    // 1. Get incoming data (Handles various gateway formats)
-    const incomingMessage = req.body.message || req.query.message || '';
-    const senderNumber = (req.body.sender || req.body.from || req.query.sender || '').toString().replace(/\s+/g, '');
+    console.log("-----------------------------------------");
+    console.log("📥 MACRODROID WEBHOOK DETECTED");
+
+    let rawMessage = '';
+    let senderNumber = 'Unknown';
+
+    // Handle Text vs JSON/Form-Data safely
+    if (typeof req.body === 'string' && req.body.length > 0) {
+        rawMessage = req.body;
+        senderNumber = req.query.sender || req.query.number || req.query.from || 'Unknown';
+    } else {
+        const data = { ...req.query, ...req.body };
+        rawMessage = data.message || data.text || data.Body || data.body || data.content || data.sms || '';
+        senderNumber = (data.sender || data.from || data.From || data.phone || data.number || 'Unknown').toString().replace(/\s/g, '');
+    }
+
+    console.log("🔍 SENDER:", senderNumber);
+    console.log("🔍 MSG:", rawMessage);
+
+    // Reject invalid messages
+    if (!rawMessage || !rawMessage.toLowerCase().includes('ride request')) {
+        console.log("❌ REJECTED: Message content does not look like a booking.");
+        return res.status(200).json({ success: false, message: 'Not a booking or empty payload' });
+    }
 
     try {
-        // Only process if it looks like a ride request
-        if (!incomingMessage.toLowerCase().includes('new ride request')) {
-            console.log("ℹ️ SMS ignored: Not a ride request.");
-            return res.status(200).json({ success: true, message: 'Not a booking' });
-        }
+        const cleanMsg = rawMessage.replace(/\r?\n|\r/g, " ").replace(/\s+/g, " ");
 
-        // 2. Improved Parser logic
         const parseField = (text, field) => {
-            const labels = ['Passenger', 'Pickup', 'Dest', 'Contact', 'Type', 'PGPS', 'DGPS'];
-            const lookahead = labels.join('|');
-            // This regex captures everything after "Field:" until the next "Label:" or end of string
-            const regex = new RegExp(`${field}:\\s*(.*?)(?=\\s*(?:${lookahead}):|$)`, 'is');
+            const regex = new RegExp(`${field}:\\s*(.*?)(?=\\s*(?:Passenger|Pickup|Dest|Contact|Type|PGPS|DGPS):|$)`, 'i');
             const match = text.match(regex);
             return match ? match[1].trim() : '';
         };
 
-        // Extracting strings from the SMS body
-        const passengerName = parseField(incomingMessage, 'Passenger');
-        const pickupAddr = parseField(incomingMessage, 'Pickup');
-        const destAddr = parseField(incomingMessage, 'Dest');
-        const phoneFromMessage = parseField(incomingMessage, 'Contact');
-        const pgpsRaw = parseField(incomingMessage, 'PGPS');
-        const dgpsRaw = parseField(incomingMessage, 'DGPS');
-        const type = parseField(incomingMessage, 'Type');
+        const passengerName = parseField(cleanMsg, 'Passenger') || 'SMS User';
+        const pickupAddr = parseField(cleanMsg, 'Pickup') || 'Unknown Pickup';
+        const destAddr = parseField(cleanMsg, 'Dest') || 'Anywhere';
+        const contact = parseField(cleanMsg, 'Contact') || senderNumber;
+        const rawType = parseField(cleanMsg, 'Type').toLowerCase();
 
-        // Helper to turn "lat,lng" string into object
-        const extractCoords = (raw) => {
-            if (!raw || raw.toLowerCase().includes('unknown')) return { lat: 0, lng: 0 };
-            const parts = raw.split(',');
-            return {
-                lat: parseFloat(parts[0]) || 0,
-                lng: parseFloat(parts[1]) || 0
-            };
-        };
+        // Safe Coordinates
+        const pgps = (parseField(cleanMsg, 'PGPS') || "0,0").split(',');
+        const dgps = (parseField(cleanMsg, 'DGPS') || "0,0").split(',');
 
-        const pCoords = extractCoords(pgpsRaw);
-        const dCoords = extractCoords(dgpsRaw);
+        const pLat = parseFloat(pgps[0]) || 0;
+        const pLng = parseFloat(pgps[1]) || 0;
+        const dLat = parseFloat(dgps[0]) || 0;
+        const dLng = parseFloat(dgps[1]) || 0;
 
-        // 3. Distance and Fare calculation
-        const distance = calculateDistanceKm(pCoords.lat, pCoords.lng, dCoords.lat, dCoords.lng);
-        const fare = distance > 0 ? Math.round(50 + (distance * 15)) : 50;
+        const dist = calculateDistanceKm(pLat, pLng, dLat, dLng);
+        const isLadiesOnly = rawType.includes('ladies');
+        const rideType = isLadiesOnly ? 'Ladies-Only' : 'Standard';
 
-        // 4. Construct the Trip Object
-        // IMPORTANT: Prioritize the phone number written in the message
-        const finalPhone = phoneFromMessage || senderNumber || 'Unknown';
+        console.log(`✅ PARSED: ${passengerName} | ${rideType} | ${dist.toFixed(2)}km`);
 
-        const newTripData = {
-            passengerId: new mongoose.Types.ObjectId(), // Generate temporary ID for SMS users
-            pickupLocation: {
-                address: pickupAddr || 'Unknown Pickup',
-                latitude: pCoords.lat,
-                longitude: pCoords.lng
-            },
-            dropoffLocation: {
-                address: destAddr || 'Anywhere',
-                latitude: dCoords.lat,
-                longitude: dCoords.lng
-            },
-            distance: parseFloat(distance.toFixed(2)),
-            estimatedFare: fare,
-            rideType: type.toLowerCase().includes('ladies') ? 'Ladies-Only' : 'Standard',
-            paymentMethod: 'cash',
+        // Database logic
+        const newTrip = new Trip({
+            passengerId: new mongoose.Types.ObjectId(),
+            passengerName: passengerName,
+            passengerPhone: contact,
+            pickupLocation: { address: pickupAddr, latitude: pLat, longitude: pLng },
+            dropoffLocation: { address: destAddr, latitude: dLat, longitude: dLng },
+            distance: parseFloat(dist.toFixed(2)),
+            estimatedFare: Math.round(50 + (dist * 15)),
+            rideType: rideType,
             tripStatus: 'Looking for Driver',
             bookingMethod: 'SMS_LITE_MODE',
-            passengerName: passengerName || 'SMS User',
-            passengerPhone: finalPhone, // Correctly mapped phone number
             createdAt: new Date()
-        };
-
-        // 5. Save to MongoDB
-        const savedTrip = await Trip.create(newTripData);
-        console.log(`✅ Trip ${savedTrip._id} saved to MongoDB`);
-
-        // 6. Sync to Firebase Realtime Database for Driver App instant updates
-        try {
-            const db = admin.database();
-            // Convert Mongoose doc to plain JSON
-            const firebaseData = JSON.parse(JSON.stringify(savedTrip));
-
-            // Ensure fields required by driver app are flat at top level
-            firebaseData.passengerPhone = finalPhone;
-            firebaseData.passengerName = passengerName || 'SMS User';
-            firebaseData.bookingMethod = 'SMS_LITE_MODE';
-
-            await db.ref('trips').child(savedTrip._id.toString()).set(firebaseData);
-            console.log("🔥 Firebase Sync Success");
-        } catch (fErr) {
-            console.error("❌ Firebase Sync Failed:", fErr.message);
-        }
-
-        res.status(200).json({
-            success: true,
-            tripId: savedTrip._id,
-            phoneNumberUsed: finalPhone
         });
 
+        const savedTrip = await newTrip.save();
+        console.log("💾 MONGO SAVED:", savedTrip._id);
+
+        try {
+            await admin.database().ref(`trips/${savedTrip._id}`).set({
+                ...savedTrip.toObject(),
+                tripId: savedTrip._id.toString(),
+                _id: savedTrip._id.toString(),
+                passengerId: savedTrip.passengerId.toString(),
+                isLadiesOnly: isLadiesOnly
+            });
+            console.log("🔥 FIREBASE SYNCED");
+        } catch (fbErr) {
+            console.error("⚠️ Firebase Sync Error:", fbErr.message);
+        }
+
+        // Return Success
+        return res.status(200).json({ success: true, tripId: savedTrip._id });
+
     } catch (error) {
-        console.error('CRITICAL Webhook Error:', error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error('❌ WEBHOOK CRITICAL ERROR:', error);
+        return res.status(500).json({ success: false, error: error.message });
     }
 });
 

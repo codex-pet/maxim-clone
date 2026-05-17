@@ -76,54 +76,73 @@ export default function DriverHomeScreen({ navigation, route }) {
     }, [fetchDriverSummary])
   );
 
-  // UPDATED POLLING LOGIC
+  // FIX: ROBUST POLLING LOGIC
   useFocusEffect(
     useCallback(() => {
       let pollInterval;
-      if (isOnline) {
-        pollInterval = setInterval(async () => {
-          try {
-            const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/trips/latest-pending?driverGender=${driverGender}`);
-            const result = await response.json();
 
-            if (result.success && result.trip) {
-              const trip = result.trip;
+      const checkPendingTrips = async () => {
+        try {
+          const driverId = route.params?.userId || user?.id;
+          const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/trips/latest-pending?driverGender=${driverGender}`);
+          const result = await response.json();
 
-              // FIX: Ignore if already declined OR if it's already been accepted by another driver
-              if (declinedTripIds.includes(trip._id) || lastNavigatedTripId.current === trip._id || trip.tripStatus !== 'Looking for Driver') {
-                return;
-              }
+          if (result.success && result.trip) {
+            const trip = result.trip;
+            const currentTripId = trip._id || trip.id; // Fallback for ID types
 
-              lastNavigatedTripId.current = trip._id;
+            if (!currentTripId) return;
 
-              // FIX: Ensure coordinates are passed as Numbers (parseFloat) so the Map works
-              navigation.navigate('DriverRideRequest', {
-                isLadiesOnly: trip.rideType === 'Ladies-Only',
-                tripId: trip._id,
-                driverId: route.params?.userId || user?.id,
-                pickupLocation: {
-                  address: trip.pickupLocation.address,
-                  latitude: parseFloat(trip.pickupLocation.latitude),
-                  longitude: parseFloat(trip.pickupLocation.longitude)
-                },
-                dropoffLocation: {
-                  address: trip.dropoffLocation.address,
-                  latitude: parseFloat(trip.dropoffLocation.latitude),
-                  longitude: parseFloat(trip.dropoffLocation.longitude)
-                },
-                estimatedFare: trip.estimatedFare,
-                distance: trip.distance,
-                passengerId: trip.passengerId,
-                passengerName: trip.passengerName // For SMS Users
-              });
-            } else {
-              // If no pending trip exists, reset our ref so the next one can trigger correctly
-              lastNavigatedTripId.current = null;
+            // Ignore if already declined, already navigated, or not pending
+            if (
+              declinedTripIds.includes(currentTripId) ||
+              lastNavigatedTripId.current === currentTripId ||
+              trip.tripStatus !== 'Looking for Driver'
+            ) {
+              return;
             }
-          } catch (error) {
-            console.error('[DRIVER POLL] Error:', error);
+
+            lastNavigatedTripId.current = currentTripId;
+
+            // Safe parsing for SMS bookings which might have missing or incomplete coordinate sets
+            const pickupLat = trip.pickupLocation?.latitude ? parseFloat(trip.pickupLocation.latitude) : 0;
+            const pickupLng = trip.pickupLocation?.longitude ? parseFloat(trip.pickupLocation.longitude) : 0;
+            const dropoffLat = trip.dropoffLocation?.latitude ? parseFloat(trip.dropoffLocation.latitude) : 0;
+            const dropoffLng = trip.dropoffLocation?.longitude ? parseFloat(trip.dropoffLocation.longitude) : 0;
+
+            console.log(`[DRIVER POLL] New Booking Incoming -> Mode: ${trip.bookingMethod || 'APP'} | ID: ${currentTripId}`);
+
+            navigation.navigate('DriverRideRequest', {
+              isLadiesOnly: trip.rideType === 'Ladies-Only',
+              tripId: currentTripId,
+              driverId: driverId,
+              pickupLocation: {
+                address: trip.pickupLocation?.address || 'Unknown Pickup',
+                latitude: pickupLat,
+                longitude: pickupLng
+              },
+              dropoffLocation: {
+                address: trip.dropoffLocation?.address || 'Unknown Dropoff',
+                latitude: dropoffLat,
+                longitude: dropoffLng
+              },
+              estimatedFare: trip.estimatedFare || 0,
+              distance: trip.distance || 0,
+              passengerId: trip.passengerId || 'SMS_USER_ID',
+              passengerName: trip.passengerName || 'SMS Passenger' // Guarantees UI won't crash
+            });
+          } else {
+            // Reset if no pending trips
+            lastNavigatedTripId.current = null;
           }
-        }, 5000);
+        } catch (error) {
+          console.error('[DRIVER POLL] Error checking pending trips:', error);
+        }
+      };
+
+      if (isOnline) {
+        checkPendingTrips(); // Call immediately upon going online
+        pollInterval = setInterval(checkPendingTrips, 5000); // Then poll every 5s
       }
 
       return () => {
@@ -131,7 +150,7 @@ export default function DriverHomeScreen({ navigation, route }) {
           clearInterval(pollInterval);
         }
       };
-    }, [isOnline, declinedTripIds, driverGender])
+    }, [isOnline, declinedTripIds, driverGender, route.params?.userId, user?.id])
   );
 
   const toggleOnline = async (val) => {
@@ -179,7 +198,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       if (result.success && result.trip) {
         navigation.navigate('DriverRideRequest', {
           isLadiesOnly: result.trip.rideType === 'Ladies-Only',
-          tripId: result.trip._id,
+          tripId: result.trip._id || result.trip.id,
           driverId: route.params?.userId || user?.id
         });
       } else {

@@ -15,60 +15,114 @@ export default function DriverRideRequestScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
-  // Extract params (ensure passengerPhone is included from the notification/poller)
+  // Extracting data from route params with heavy fallbacks
   const {
-    isLadiesOnly,
+    isLadiesOnly = false,
     tripId,
-    pickupLocation,
-    dropoffLocation,
-    estimatedFare,
-    distance,
-    passengerId,
-    passengerName: smsPassengerName,
-    passengerPhone: rawPhone, // 👈 Added this
-    bookingMethod
+    pickupLocation = {},
+    dropoffLocation = {},
+    estimatedFare = 0,
+    distance = 0,
+    passengerId = '',
+    passengerName: rawName = '',
+    passengerPhone: rawPhone = '',
+    bookingMethod = ''
   } = route.params || {};
 
-  const isSms = bookingMethod === 'SMS_LITE_MODE';
-
-  // HELPER: Robust cleaning for names and addresses
-  const cleanDisplayString = (str) => {
-    if (!str) return 'Not set';
-    return str.split(/Pickup:|Dest:|Contact:|Type:|PGPS:|DGPS:/i)[0].trim();
+  // Helper to remove SMS labels safely without crashing
+  const cleanSmsLabels = (str) => {
+    if (!str) return '';
+    if (typeof str !== 'string') return String(str);
+    return str.replace(/(Passenger:|Pickup:|Dest:|Contact:|Type:|PGPS:|DGPS:)/gi, '').trim();
   };
 
-  const passengerName = cleanDisplayString(smsPassengerName || passengerId?.name || 'Passenger');
-  const passengerPhone = rawPhone ? rawPhone.trim() : 'Not Available';
-
+  // State
+  const [isSmsMode, setIsSmsMode] = useState(bookingMethod === 'SMS_LITE_MODE');
+  const [resolvedPhone, setResolvedPhone] = useState('Loading...');
+  const [passengerName, setPassengerName] = useState(cleanSmsLabels(rawName) || 'Loading...');
   const [sosVisible, setSosVisible] = useState(false);
   const [timeLeft, setTimeLeft] = useState(TIMER_SECONDS);
   const [hasResponded, setHasResponded] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [displayPickup, setDisplayPickup] = useState(cleanSmsLabels(pickupLocation?.address) || 'Detecting...');
+  const [displayDropoff, setDisplayDropoff] = useState(cleanSmsLabels(dropoffLocation?.address) || 'Anywhere');
 
-  const [displayPickup, setDisplayPickup] = useState(pickupLocation?.address || 'Detecting...');
+  // Animation refs
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerAnim = useRef(new Animated.Value(1)).current;
 
+  // Safe Coordinates for Map rendering (Prevents Leaflet from crashing)
+  const pLat = parseFloat(pickupLocation?.latitude || 0);
+  const pLng = parseFloat(pickupLocation?.longitude || 0);
+  const dLat = parseFloat(dropoffLocation?.latitude || 0);
+  const dLng = parseFloat(dropoffLocation?.longitude || 0);
+
+  const hasValidPickupCoords = !isNaN(pLat) && !isNaN(pLng) && pLat !== 0 && pLng !== 0;
+  const hasValidDropoffCoords = !isNaN(dLat) && !isNaN(dLng) && dLat !== 0 && dLng !== 0;
+
+  // 1. Resolve Passenger Details Safely
+  useEffect(() => {
+    const resolveDetails = async () => {
+      // If we already know it's SMS mode
+      if (bookingMethod === 'SMS_LITE_MODE') {
+        setResolvedPhone(cleanSmsLabels(rawPhone) || 'SMS User');
+        setPassengerName(cleanSmsLabels(rawName) || 'SMS Passenger');
+        return;
+      }
+
+      // App User Logic
+      if (passengerId && typeof passengerId === 'object') {
+        setResolvedPhone(passengerId.phoneNumber || 'Not Available');
+        setPassengerName(passengerId.name || 'Passenger');
+      } else if (typeof passengerId === 'string' && passengerId !== 'SMS_USER_ID') {
+        try {
+          const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/users/${passengerId}`);
+          const data = await response.json();
+
+          if (data?.success && data?.user) {
+            setResolvedPhone(data.user.phoneNumber || 'Not Available');
+            setPassengerName(data.user.name || 'Passenger');
+          } else {
+            // User not found -> It's a Lite Mode SMS booking!
+            setIsSmsMode(true);
+            setResolvedPhone(cleanSmsLabels(rawPhone) || 'SMS Trip');
+            setPassengerName(cleanSmsLabels(rawName) || 'SMS Passenger');
+          }
+        } catch (err) {
+          // Fallback if network fails
+          setResolvedPhone(cleanSmsLabels(rawPhone) || 'Not Available');
+          setPassengerName(cleanSmsLabels(rawName) || 'Passenger');
+        }
+      } else {
+        setIsSmsMode(true);
+        setResolvedPhone(cleanSmsLabels(rawPhone) || 'SMS Trip');
+        setPassengerName(cleanSmsLabels(rawName) || 'SMS Passenger');
+      }
+    };
+    resolveDetails();
+  }, [passengerId, rawPhone, rawName, bookingMethod]);
+
+  // 2. Reverse Geocode Pickup if it's just coordinates
   useEffect(() => {
     const resolveAddress = async () => {
-      if ((displayPickup.includes('Current') || displayPickup.includes('Detecting')) && pickupLocation?.latitude) {
+      if ((displayPickup.includes('Current') || displayPickup.includes('8.')) && hasValidPickupCoords) {
         try {
           const rev = await Location.reverseGeocodeAsync({
-            latitude: pickupLocation.latitude,
-            longitude: pickupLocation.longitude
+            latitude: pLat,
+            longitude: pLng
           });
           if (rev && rev.length > 0) {
             const item = rev[0];
             const addr = `${item.name || ''} ${item.street || ''}, ${item.city || ''}`.trim().replace(/,$/, '');
             if (addr) setDisplayPickup(addr);
           }
-        } catch (e) { console.log('Resolve error:', e); }
+        } catch (e) { console.log('Reverse Geocode Error:', e); }
       }
     };
     resolveAddress();
-  }, []);
+  }, [pLat, pLng, displayPickup, hasValidPickupCoords]);
 
-  // Timer & Animation Logic
+  // 3. Timer Logic
   useEffect(() => {
     if (hasResponded || isProcessing) return;
     if (timeLeft <= 0) { handleDecline(); return; }
@@ -76,6 +130,7 @@ export default function DriverRideRequestScreen({ navigation, route }) {
     return () => clearTimeout(timer);
   }, [timeLeft, hasResponded, isProcessing]);
 
+  // 4. Animations
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -102,20 +157,20 @@ export default function DriverRideRequestScreen({ navigation, route }) {
       if (result.success) {
         navigation.replace('DriverActiveTrip', { tripId: result.trip._id });
       } else {
-        Alert.alert('Trip Taken', 'Already accepted by another driver.');
+        Alert.alert('Trip Taken', result.message || 'Already accepted by another driver.');
         navigation.navigate('DriverTabs');
       }
     } catch (error) {
       setIsProcessing(false);
       setHasResponded(false);
-      Alert.alert('Error', 'Connection failed.');
+      Alert.alert('Error', 'Failed to accept trip. Check your connection.');
     }
   };
 
-  const handleDecline = async () => {
+  const handleDecline = () => {
     if (hasResponded) return;
     setHasResponded(true);
-    navigation.navigate('DriverTabs');
+    navigation.navigate('DriverTabs', { declinedTripId: tripId });
   };
 
   const timerColor = timeLeft > 15 ? COLORS.primaryGreen : timeLeft > 5 ? COLORS.cta : COLORS.danger;
@@ -137,44 +192,51 @@ export default function DriverRideRequestScreen({ navigation, route }) {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
-        {/* Animated Banner */}
-        <Animated.View style={[styles.requestBanner, { transform: [{ scale: pulseAnim }] }, isLadiesOnly && styles.requestBannerLadies]}>
+        <Animated.View style={[
+          styles.requestBanner,
+          { transform: [{ scale: pulseAnim }] },
+          isLadiesOnly && styles.requestBannerLadies
+        ]}>
           <View style={styles.timerCircle}>
             <Text style={[styles.timerText, { color: timerColor }]}>{timeLeft}</Text>
           </View>
           <View style={styles.bannerContent}>
             <Text style={styles.bannerTitle}>{isLadiesOnly ? '👩 Ladies-Only Request' : '🚗 New Ride Request'}</Text>
-            <Text style={styles.bannerSubtitle}>{passengerName} is nearby</Text>
+            <Text style={styles.bannerSubtitle}>{passengerName} is looking for a ride</Text>
           </View>
         </Animated.View>
 
-        {/* Passenger Info Card */}
         <View style={styles.passengerCard}>
-          <View style={styles.avatarContainer}>
-            <Ionicons name={isLadiesOnly ? 'female' : 'person'} size={24} color={isLadiesOnly ? COLORS.ladiesOnly : COLORS.primary} />
+          <View style={[styles.avatarContainer, isLadiesOnly && { backgroundColor: '#FCE4EC' }]}>
+            <Ionicons
+              name={isLadiesOnly ? 'female' : 'person'}
+              size={24}
+              color={isLadiesOnly ? COLORS.ladiesOnly : COLORS.primary}
+            />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.passengerName} numberOfLines={1}>{passengerName}</Text>
-            <Text style={styles.phoneText}>{passengerPhone}</Text>
+            <Text style={styles.phoneText}>{resolvedPhone}</Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: isSms ? '#E3F2FD' : '#E8F5E9' }]}>
-            <Text style={[styles.badgeText, { color: isSms ? '#1976D2' : COLORS.primaryGreen }]}>
-              {isSms ? 'LITE' : 'APP'}
+          <View style={[styles.badge, { backgroundColor: isSmsMode ? '#E3F2FD' : '#E8F5E9' }]}>
+            <Text style={[styles.badgeText, { color: isSmsMode ? '#1976D2' : COLORS.primaryGreen }]}>
+              {isSmsMode ? 'LITE' : 'APP'}
             </Text>
           </View>
         </View>
 
-        {/* Map View */}
+        {/* Prevent Map Crashes if Macrodroid didn't send coordinates */}
         <View style={styles.mapContainer}>
-          {pickupLocation?.latitude ? (
+          {hasValidPickupCoords ? (
             <LeafletMap
-              pickup={{ lat: pickupLocation.latitude, lng: pickupLocation.longitude }}
-              destination={dropoffLocation?.latitude ? { lat: dropoffLocation.latitude, lng: dropoffLocation.longitude } : null}
+              pickup={{ lat: pLat, lng: pLng }}
+              destination={hasValidDropoffCoords ? { lat: dLat, lng: dLng } : null}
             />
-          ) : <MapPlaceholder />}
+          ) : (
+            <MapPlaceholder />
+          )}
         </View>
 
-        {/* Trip Details */}
         <View style={styles.tripCard}>
           <Text style={styles.tripCardTitle}>TRIP DETAILS</Text>
 
@@ -182,7 +244,7 @@ export default function DriverRideRequestScreen({ navigation, route }) {
             <Ionicons name="location" size={18} color={COLORS.primaryGreen} />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={styles.locLabel}>PICKUP</Text>
-              <Text style={styles.locText} numberOfLines={2}>{cleanDisplayString(displayPickup)}</Text>
+              <Text style={styles.locText} numberOfLines={2}>{displayPickup}</Text>
             </View>
           </View>
 
@@ -192,14 +254,14 @@ export default function DriverRideRequestScreen({ navigation, route }) {
             <Ionicons name="flag" size={18} color={COLORS.danger} />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={styles.locLabel}>DESTINATION</Text>
-              <Text style={styles.locText} numberOfLines={2}>{cleanDisplayString(dropoffLocation?.address)}</Text>
+              <Text style={styles.locText} numberOfLines={2}>{displayDropoff}</Text>
             </View>
           </View>
 
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>DISTANCE</Text>
-              <Text style={styles.statValue}>{distance || '0.0'} km</Text>
+              <Text style={styles.statValue}>{parseFloat(distance || 0).toFixed(2)} km</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>EST. FARE</Text>
@@ -209,12 +271,15 @@ export default function DriverRideRequestScreen({ navigation, route }) {
         </View>
       </ScrollView>
 
-      {/* Footer Buttons */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.declineBtn} onPress={handleDecline} disabled={isProcessing}>
           <Text style={styles.declineBtnText}>Decline</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.acceptBtn, isLadiesOnly && styles.acceptBtnLadies]} onPress={handleAccept} disabled={isProcessing}>
+        <TouchableOpacity
+          style={[styles.acceptBtn, isLadiesOnly && styles.acceptBtnLadies]}
+          onPress={handleAccept}
+          disabled={isProcessing}
+        >
           {isProcessing ? <ActivityIndicator color="#FFF" /> : <Text style={styles.acceptBtnText}>Accept Ride</Text>}
         </TouchableOpacity>
       </View>

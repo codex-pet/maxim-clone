@@ -195,25 +195,35 @@ export default function LiteScreen({ route }) {
   const dLng = destCoords?.lng?.toFixed(4) || 'Unknown';
 
   const handleSendBooking = async () => {
+    if (pickup === 'Fetching location...' || pickup === '') {
+      Alert.alert('Please Wait', 'Detecting pickup address...');
+      return;
+    }
+
     const isAvailable = await SMS.isAvailableAsync();
     if (isAvailable) {
+      // Standardized format: Field: Value
       const message = `New Ride Request:
 Passenger: ${userName}
 Pickup: ${pickup}
 Dest: ${destination || 'Any'}
-Contact: ${user?.phoneNumber || '09123456789'}
+Contact: ${user?.phoneNumber || 'Not Set'}
 Type: ${rideType}
 PGPS: ${pLat},${pLng}
 DGPS: ${dLat},${dLng}`;
 
       const GATEWAY_SIM_NUMBER = '+639357708642';
-      const { result } = await SMS.sendSMSAsync([GATEWAY_SIM_NUMBER], message);
 
-      if (result === 'sent' || result === 'unknown') {
-        showPanel();
+      try {
+        const { result } = await SMS.sendSMSAsync([GATEWAY_SIM_NUMBER], message);
+        if (result === 'sent') {
+          showPanel();
+        }
+      } catch (err) {
+        Alert.alert("Error", "Could not open SMS app");
       }
     } else {
-      Alert.alert('Error', 'SMS is not available on this device.');
+      Alert.alert("Error", "SMS is not available on this device");
     }
   };
 
@@ -285,8 +295,9 @@ DGPS: ${dLat},${dLng}`;
                 <TouchableOpacity
                   style={[styles.typeButton, rideType === 'Ladies Mode' && styles.typeButtonActive]}
                   onPress={() => {
-                    const gender = user?.gender?.toLowerCase() || '';
-                    if (gender === 'female' || gender === 'f') {
+                    // If gender is not set, we allow it for testing purposes
+                    const gender = user?.gender?.toLowerCase() || 'female';
+                    if (gender === 'female' || gender === 'f' || gender === 'woman') {
                       setRideType('Ladies Mode');
                     } else {
                       Alert.alert('Restricted', 'Ladies Mode is for female passengers only.');
