@@ -9,12 +9,34 @@ const { initDb } = require('./config/db');
 // ==========================================
 // --- INITIALIZE FIREBASE ADMIN ---
 // ==========================================
-const serviceAccount = require('./config/serviceAccountKey.json');
+let serviceAccount;
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: process.env.FIREBASE_DATABASE_URL
-});
+// Logic to handle Render (Environment Variable) vs Local (File)
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    // On Render, we paste the JSON content into this environment variable
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } catch (err) {
+    console.error("❌ Error parsing FIREBASE_SERVICE_ACCOUNT env var:", err.message);
+  }
+} else {
+  try {
+    // Locally, we use the file
+    serviceAccount = require('./config/serviceAccountKey.json');
+  } catch (err) {
+    console.log("⚠️ serviceAccountKey.json not found. Ensure FIREBASE_SERVICE_ACCOUNT env var is set.");
+  }
+}
+
+if (serviceAccount) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: process.env.FIREBASE_DATABASE_URL || "https://maxim-clone-default-rtdb.asia-southeast1.firebasedatabase.app"
+  });
+  console.log("✅ Firebase Admin Initialized");
+} else {
+  console.error("❌ Firebase Admin failed to initialize: No credentials found.");
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -29,11 +51,10 @@ const io = new Server(server, {
 // ==========================================
 app.use(cors());
 
-// 🚨 CRITICAL PARSER ORDER FOR MACRODROID:
-// This ensures whatever format Macrodroid uses, Express handles it correctly.
-app.use(express.json({ limit: '10mb' })); // Parses application/json
-app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Parses application/x-www-form-urlencoded
-app.use(express.text()); // Parses raw text
+// CRITICAL PARSER ORDER:
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.text());
 
 // ==========================================
 // --- ROUTES ---
@@ -44,10 +65,14 @@ const smsRoutes = require('./routes/smsRoutes');
 
 app.use('/api', routes);
 app.use('/api/trips', tripRoutes);
-app.use('/api/sms', smsRoutes); // Webhook lives here: /api/sms/webhook
+app.use('/api/sms', smsRoutes);
 
 app.get('/', (req, res) => {
-  res.json({ message: 'Maxim-Clone Backend API is active and Firebase is synced.' });
+  res.json({
+    status: "online",
+    message: 'Maxim-Clone Backend API is active.',
+    database: process.env.NODE_ENV
+  });
 });
 
 // ==========================================
@@ -84,12 +109,20 @@ io.on('connection', (socket) => {
 // --- START SERVER ---
 // ==========================================
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, '0.0.0.0', async () => {
+
+const startServer = async () => {
   try {
+    // Initialize MongoDB Connection
     await initDb();
-    console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
-    console.log(`🔥 Firebase Realtime DB connected: https://maxim-clone-default-rtdb.asia-southeast1.firebasedatabase.app`);
+
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🌍 URL: http://0.0.0.0:${PORT}`);
+    });
   } catch (dbError) {
     console.error("❌ Database Initialization Failed:", dbError);
+    process.exit(1);
   }
-});
+};
+
+startServer();
