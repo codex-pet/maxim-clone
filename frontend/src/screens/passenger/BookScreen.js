@@ -71,7 +71,7 @@ export default function BookScreen({ navigation, route }) {
 
   const isLadiesOnly = rideType === 'ladiesOnly';
 
-  // NEW: Intercept ride type selection to block male passengers
+  // Intercept ride type selection to block male passengers
   const handleRideTypeSelect = (selectedType) => {
     const passengerGender = user?.gender?.toLowerCase() || '';
 
@@ -137,17 +137,61 @@ export default function BookScreen({ navigation, route }) {
       return;
     }
     setActiveInput(type);
+
     try {
       const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`;
-      const response = await fetch(url);
-      const data = await response.json();
+
+      // 1. Add headers to prevent the server from blocking the request and returning HTML
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'MyRideApp/1.0' // Sometimes required by public APIs
+        }
+      });
+
+      // 2. Extract as text first to safely check the response
+      const text = await response.text();
+
+      // 3. If response starts with '<', it's HTML (Error/Cloudflare Challenge)
+      if (text.trim().startsWith('<')) {
+        console.warn('Photon API returned HTML. Using Nominatim Fallback API...');
+
+        // --- Fallback to OpenStreetMap Nominatim API ---
+        const fallbackUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`;
+        const fallbackResponse = await fetch(fallbackUrl, {
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'MyRideApp/1.0' // Required by Nominatim
+          }
+        });
+
+        const fallbackData = await fallbackResponse.json();
+        if (fallbackData && fallbackData.length > 0) {
+          const formatted = fallbackData.map(f => ({
+            display_name: f.display_name,
+            lat: f.lat,
+            lon: f.lon,
+          }));
+          setSuggestions(formatted);
+        }
+        return; // Exit here since we used the fallback
+      }
+
+      // 4. If it's valid JSON, parse and map it
+      const data = JSON.parse(text);
 
       if (data && data.features) {
-        const formatted = data.features.map(f => ({
-          display_name: `${f.properties.name || ''}, ${f.properties.city || f.properties.state || ''}`.trim(),
-          lat: f.geometry.coordinates[1],
-          lon: f.geometry.coordinates[0],
-        }));
+        const formatted = data.features.map(f => {
+          const name = f.properties.name || '';
+          const city = f.properties.city || f.properties.state || '';
+          const separator = name && city ? ', ' : '';
+
+          return {
+            display_name: `${name}${separator}${city}`.trim(),
+            lat: f.geometry.coordinates[1],
+            lon: f.geometry.coordinates[0],
+          };
+        });
         setSuggestions(formatted);
       }
     } catch (error) {
