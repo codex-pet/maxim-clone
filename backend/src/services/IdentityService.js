@@ -52,7 +52,7 @@ class IdentityService {
           name: name || '',
           role: role || 'PASSENGER',
           gender: gender || 'unspecified',
-          firebaseUid: `email-${Date.now()}-${Math.floor(Math.random() * 1000)}` 
+          firebaseUid: `email-${Date.now()}-${Math.floor(Math.random() * 1000)}`
         });
         await user.save();
         console.log(`✨ New Email User Registered: ${email} (${name || 'No Name'})`);
@@ -62,7 +62,6 @@ class IdentityService {
           user.name = name;
           needsSave = true;
         }
-        // Backfill firebaseUid for users created before the field was added
         if (!user.firebaseUid) {
           user.firebaseUid = `email-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
           needsSave = true;
@@ -76,12 +75,47 @@ class IdentityService {
       throw error;
     }
   }
+
+  static async syncMockPhoneUser(phoneNumber, role, name, gender) {
+    try {
+      let user = await User.findOne({ phoneNumber });
+
+      if (!user) {
+        user = new User({
+          phoneNumber,
+          name: name || '',
+          role: role || 'PASSENGER',
+          gender: gender || 'unspecified',
+          firebaseUid: `mock-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+        });
+        await user.save();
+        console.log(`✨ New Mock Phone User Registered: ${phoneNumber} (${name || 'No Name'})`);
+      } else {
+        let needsSave = false;
+        if (name && !user.name) {
+          user.name = name;
+          needsSave = true;
+        }
+        if (!user.firebaseUid) {
+          user.firebaseUid = `mock-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+          needsSave = true;
+        }
+        if (needsSave) await user.save();
+        console.log(`🔑 Mock Phone User Logged In: ${phoneNumber}`);
+      }
+
+      return user;
+    } catch (error) {
+      console.error('IdentityService Mock Phone Sync Error:', error.message);
+      throw error;
+    }
+  }
+
   static async findUserByEmail(email) {
     return await User.findOne({ email });
   }
 
   static async findUserByPhone(phoneNumber) {
-    // Also check for firebaseUid mapping if needed, but phone is indexed
     return await User.findOne({ phoneNumber });
   }
 }
