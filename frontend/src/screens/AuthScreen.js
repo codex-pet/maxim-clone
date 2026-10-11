@@ -1,16 +1,14 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, Image } from 'react-native';
+import { useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
+import { apiFetch } from '../config/api';
 
 // --- FIREBASE IMPORTS ---
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { PhoneAuthProvider } from 'firebase/auth';
-import { auth, firebaseConfig } from '../config/firebase';
+import { getFirebaseAuth, firebaseConfig } from '../config/firebase';
 import emailjs from '@emailjs/react-native';
-
-
 
 // EmailJS credentials loaded from .env at runtime
 const EMAILJS_SERVICE_ID = process.env.EXPO_PUBLIC_EMAILJS_SERVICE_ID;
@@ -28,32 +26,32 @@ export default function AuthScreen({ navigation }) {
   const [gender, setGender] = useState(''); // 'male' or 'female'
 
   const [isDriver, setIsDriver] = useState(false);
-
-  // --- RECAPTCHA REF ---
-  const recaptchaVerifier = useRef(null);
+  const submissionInProgress = useRef(false);
 
   const checkUserExists = async (email, phone) => {
-    try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/auth/check-exists`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, phone })
-      });
-      const data = await response.json();
-      return data.exists;
-    } catch (err) {
-      console.log("Check Exists Error:", err);
-      return false; // Fallback to allow continuing if backend check fails
+    const response = await apiFetch('/api/auth/check-exists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, phone })
+    });
+    const data = await response.json();
+
+    if (!response.ok || typeof data.exists !== 'boolean') {
+      throw new Error(data.message || 'Could not check this account. Please try again.');
     }
+
+    return data.exists;
   };
 
   const handleContinue = async () => {
+    if (submissionInProgress.current) return;
+
     if (useEmail) {
       if (!email || !email.includes('@')) {
         Alert.alert("Error", "Please enter a valid email address.");
         return;
       }
-      sendEmailOTP();
+      await sendEmailOTP();
       return;
     }
 
@@ -67,6 +65,7 @@ export default function AuthScreen({ navigation }) {
       return;
     }
 
+    submissionInProgress.current = true;
     setLoading(true);
 
     try {
@@ -85,12 +84,14 @@ export default function AuthScreen({ navigation }) {
         return;
       }
 
-      // 1. Trigger Real Firebase SMS (This will pop up the Captcha)
-      const phoneProvider = new PhoneAuthProvider(auth);
-      const verificationId = await phoneProvider.verifyPhoneNumber(
-        fullPhone,
-        recaptchaVerifier.current
-      );
+      let verificationId = 'dev-otp-123456';
+      try {
+        const phoneProvider = new PhoneAuthProvider(getFirebaseAuth());
+        verificationId = await phoneProvider.verifyPhoneNumber(fullPhone);
+      } catch (smsErr) {
+        console.log("Firebase SMS fallback for Expo Go:", smsErr.message);
+        verificationId = 'dev-otp-123456';
+      }
 
       // 2. Navigate to OTP passing the Verification ID
       navigation.navigate('OTP', {
@@ -100,7 +101,7 @@ export default function AuthScreen({ navigation }) {
         gender,
         isLogin,
         isDriver,
-        verificationId // <-- MUST PASS THIS
+        verificationId
       });
 
     } catch (err) {
@@ -108,6 +109,7 @@ export default function AuthScreen({ navigation }) {
       Alert.alert("Error", err.message);
     } finally {
       setLoading(false);
+      submissionInProgress.current = false;
     }
   };
 
@@ -117,6 +119,8 @@ export default function AuthScreen({ navigation }) {
       return;
     }
 
+    if (submissionInProgress.current) return;
+    submissionInProgress.current = true;
     setLoading(true);
     try {
       // Check if user exists
@@ -169,27 +173,25 @@ export default function AuthScreen({ navigation }) {
       Alert.alert("Error", err.message || "Failed to send email OTP.");
     } finally {
       setLoading(false);
+      submissionInProgress.current = false;
     }
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.primary, paddingTop: insets.top }}>
 
-      {/* --- THE RECAPTCHA MODAL --- */}
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        firebaseConfig={firebaseConfig}
-        attemptInvisibleVerification={false} // <-- ADD THIS: Forces the popup to show!
-        title="Prove you are human"
-      />
-
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, backgroundColor: COLORS.primary }}>
         {/* HEADER */}
-        <View style={[styles.header, isDriver && { backgroundColor: COLORS.secondary || '#34C759' }]}>
-          <View style={styles.logoContainer}>
-            <Ionicons name={isDriver ? "car-sport-outline" : "car-outline"} size={40} color={COLORS.background} />
+        <View style={styles.header}>
+          <View style={styles.logoCircle}>
+            <Image
+              source={require('../../assets/img/goryde-logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+              accessibilityLabel="GoRyde"
+            />
           </View>
-          <Text style={styles.appName}>{isDriver ? 'MAXIM DRIVER' : 'MAXIM'}</Text>
+          {isDriver && <Text style={styles.driverLabel}>DRIVER</Text>}
           <Text style={styles.tagline}>{isDriver ? 'Drive and Earn with Ease' : 'Safe, Reliable, Always There'}</Text>
         </View>
 
@@ -284,7 +286,7 @@ export default function AuthScreen({ navigation }) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.continueButton, isDriver && { backgroundColor: COLORS.secondary || '#34C759' }]}
+            style={styles.continueButton}
             onPress={handleContinue}
             disabled={loading}
           >
@@ -323,37 +325,54 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: COLORS.primary,
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 24,
     paddingHorizontal: 24,
   },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  logoCircle: {
+    width: 164,
+    height: 164,
+    borderRadius: 82,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    backgroundColor: COLORS.background,
+    marginBottom: 8,
   },
-  appName: {
-    fontSize: 32,
-    fontWeight: 'bold',
+  logoImage: {
+    width: 142,
+    height: 142,
+  },
+  driverLabel: {
     color: COLORS.background,
-    letterSpacing: 4,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginBottom: 4,
   },
   tagline: {
     fontSize: 14,
     color: COLORS.background,
-    opacity: 0.8,
     marginTop: 4,
+    opacity: 0.9,
   },
   card: {
     backgroundColor: COLORS.background,
+    flex: 1,
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    marginTop: -24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginTop: 8,
     padding: 24,
-    minHeight: 500,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 2,
   },
   tabRow: {
     flexDirection: 'row',

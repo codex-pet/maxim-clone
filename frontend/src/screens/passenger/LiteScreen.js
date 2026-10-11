@@ -252,7 +252,7 @@ DGPS: ${dLat},${dLng}`;
               <View style={styles.handle} />
             </View>
 
-            <View style={styles.orangeSection}>
+            <View style={styles.brandSection}>
               <View style={styles.banner}>
                 <Ionicons name="flash-outline" size={14} color={COLORS.background} />
                 <Text style={styles.bannerText}>Lite Mode - Booking via SMS</Text>
@@ -279,7 +279,7 @@ DGPS: ${dLat},${dLng}`;
 
               <Text style={styles.sectionTitle}>Booking Details</Text>
               <View style={styles.inputContainer}>
-                <LocationInput dotColor={COLORS.cta} placeholder="Pickup location" value={pickup} onChangeText={setPickup} />
+                <LocationInput dotColor={COLORS.primary} placeholder="Pickup location" value={pickup} onChangeText={setPickup} />
                 <View style={styles.divider} />
                 <LocationInput dotColor={COLORS.primaryGreen} placeholder="Destination" value={destination} onChangeText={setDestination} />
               </View>
@@ -293,7 +293,11 @@ DGPS: ${dLat},${dLng}`;
                   <Text style={[styles.typeButtonText, rideType === 'Standard' && styles.typeButtonTextActive]}>Standard</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.typeButton, rideType === 'Ladies Mode' && styles.typeButtonActive]}
+                  style={[
+                    styles.typeButton,
+                    styles.ladiesModeButton,
+                    rideType === 'Ladies Mode' && styles.ladiesModeButtonActive,
+                  ]}
                   onPress={() => {
                     // If gender is not set, we allow it for testing purposes
                     const gender = user?.gender?.toLowerCase() || 'female';
@@ -304,7 +308,15 @@ DGPS: ${dLat},${dLng}`;
                     }
                   }}
                 >
-                  <Text style={[styles.typeButtonText, rideType === 'Ladies Mode' && styles.typeButtonTextActive]}>Ladies Mode</Text>
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      styles.ladiesModeButtonText,
+                      rideType === 'Ladies Mode' && styles.typeButtonTextActive,
+                    ]}
+                  >
+                    Ladies Mode
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -322,7 +334,7 @@ DGPS: ${dLat},${dLng}`;
                   subtitle={`Pickup: ${pLat}, ${pLng}\nDest: ${dLat}, ${dLng}`}
                 />
                 <BookingStatusItem icon="phone-portrait-outline" iconBackground={COLORS.primary} title="SMS Ready" subtitle="Tap button to send Booking" />
-                <BookingStatusItem icon="sync-outline" iconBackground={COLORS.cta} title="Processing" subtitle="Waiting for SMS to be sent" />
+                <BookingStatusItem icon="sync-outline" iconBackground={COLORS.ctaYellow} title="Processing" subtitle="Waiting for SMS to be sent" />
                 <BookingStatusItem icon="car-outline" iconBackground={COLORS.danger} title="Driver Match" subtitle="Response via SMS" />
               </View>
 
@@ -342,7 +354,7 @@ DGPS: ${dLat},${dLng}`;
             <Text style={styles.panelSubtitle}>Your SMS booking request has been sent.</Text>
             <BookingStatusItem icon="checkmark-circle-outline" iconBackground={COLORS.primaryGreen} title="GPS Captured" subtitle={`P: ${pLat},${pLng} | D: ${dLat},${dLng}`} />
             <BookingStatusItem icon="phone-portrait-outline" iconBackground={COLORS.primary} title="SMS Sent" subtitle="Request transmitted" />
-            <BookingStatusItem icon="sync-outline" iconBackground={COLORS.cta} title="Processing" subtitle="Matching you with a driver" />
+            <BookingStatusItem icon="sync-outline" iconBackground={COLORS.ctaYellow} title="Processing" subtitle="Matching you with a driver" />
             <BookingStatusItem icon="car-outline" iconBackground={COLORS.danger} title="Driver Match" subtitle="Waiting for response" />
           </Animated.View>
         )}
@@ -352,15 +364,15 @@ DGPS: ${dLat},${dLng}`;
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.backgroundLight },
-  headerWrapper: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: COLORS.backgroundLight, zIndex: 100 },
+  container: { flex: 1, backgroundColor: COLORS.primary },
+  headerWrapper: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: COLORS.primary, zIndex: 100 },
   animatedSheet: { flex: 1, zIndex: 2 },
   scroll: { flex: 1 },
   scrollContent: { flexGrow: 1 },
-  sheet: { flex: 1, backgroundColor: COLORS.cta, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', minHeight: height },
-  dragArea: { alignItems: 'center', paddingTop: 10, paddingBottom: 4, backgroundColor: COLORS.cta },
+  sheet: { flex: 1, backgroundColor: COLORS.primaryDark, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', minHeight: height },
+  dragArea: { alignItems: 'center', paddingTop: 10, paddingBottom: 4, backgroundColor: COLORS.primaryDark },
   handle: { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 2 },
-  orangeSection: { backgroundColor: COLORS.cta, paddingHorizontal: 24, paddingBottom: 16 },
+  brandSection: { backgroundColor: COLORS.primaryDark, paddingHorizontal: 24, paddingBottom: 16 },
   banner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 12 },
   bannerText: { color: COLORS.background, fontSize: 12, fontWeight: 'bold' },
   liteModeHeader: { paddingBottom: 24 },
@@ -374,14 +386,17 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 8 },
   typeToggleContainer: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   typeButton: { flex: 1, paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, alignItems: 'center' },
-  typeButtonActive: { backgroundColor: COLORS.cta, borderColor: COLORS.cta },
+  typeButtonActive: { backgroundColor: '#10B981', borderColor: '#10B981' },
+  ladiesModeButton: { borderColor: COLORS.ladiesOnly },
+  ladiesModeButtonActive: { backgroundColor: COLORS.ladiesOnly, borderColor: COLORS.ladiesOnly },
   typeButtonText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  ladiesModeButtonText: { color: COLORS.ladiesOnly },
   typeButtonTextActive: { color: COLORS.background },
   smsCard: { backgroundColor: COLORS.background, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 16 },
-  smsTitle: { fontSize: 14, fontWeight: 'bold', color: COLORS.cta, textAlign: 'center', marginBottom: 12 },
+  smsTitle: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary, textAlign: 'center', marginBottom: 12 },
   smsText: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 20, fontFamily: 'monospace' },
   statusCard: { backgroundColor: COLORS.background, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 16 },
-  sendButton: { backgroundColor: COLORS.cta, paddingVertical: 18, borderRadius: 30, alignItems: 'center', marginTop: 8 },
+  sendButton: { backgroundColor: COLORS.primary, paddingVertical: 18, borderRadius: 30, alignItems: 'center', marginTop: 8 },
   sendButtonText: { color: COLORS.background, fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
   noInternet: { textAlign: 'center', fontSize: 12, color: COLORS.textSecondary, marginTop: 8 },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 200 },

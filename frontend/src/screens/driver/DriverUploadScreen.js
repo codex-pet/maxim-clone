@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: '#E8F0FE',
+    backgroundColor: COLORS.secondaryLight,
     borderRadius: 12,
     padding: 12,
     marginBottom: 24,

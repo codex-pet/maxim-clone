@@ -210,7 +210,7 @@ export default function DriverHomeScreen({ navigation, route }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.backgroundLight, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.primary, paddingTop: insets.top }}>
       <Header userName={driverName} userEmail={user?.email || userEmail} />
 
       <TouchableOpacity
@@ -223,7 +223,7 @@ export default function DriverHomeScreen({ navigation, route }) {
         </Text>
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={{ backgroundColor: COLORS.page }} contentContainerStyle={{ paddingBottom: 40 }}>
         {isFemaleDriver && (
           <View style={styles.ladiesOnlyBanner}>
             <Ionicons name="female-outline" size={16} color={COLORS.ladiesOnly} />

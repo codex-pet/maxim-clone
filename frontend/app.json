@@ -1,23 +1,23 @@
 {
   "expo": {
-    "name": "Maxim-Clone",
+    "name": "GoRyde",
     "slug": "maxim-clone",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/img/goryde-splash-icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/img/goryde-splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F8FAFC"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/img/goryde-splash-icon.png",
+        "backgroundColor": "#F8FAFC"
       },
       "package": "com.maximclone.app",
       "permissions": [
@@ -27,7 +27,17 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/img/goryde-splash-icon.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow GoRyde to access your microphone for voice translation."
+        }
+      ]
+    ]
   }
 }

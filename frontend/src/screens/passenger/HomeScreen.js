@@ -51,7 +51,7 @@ export default function HomeScreen({ route }) {
   };
 
   return (
-    <View style={{ flex: 1, paddingTop: insets.top }}>
+    <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: COLORS.primary }}>
       <Header userName={userName} userEmail={userEmail} />
 
       {!isConnected && (
@@ -67,8 +67,8 @@ export default function HomeScreen({ route }) {
       )}
 
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        style={{ flex: 1, backgroundColor: COLORS.page }}
+        contentContainerStyle={{ paddingBottom: 20, width: '100%', maxWidth: 960, alignSelf: 'center' }}
       >
         <View style={styles.container}>
           <MapPlaceholder
@@ -123,6 +123,7 @@ const styles = StyleSheet.create({
   view: {
     paddingHorizontal: 16,
     marginTop: 16,
+    paddingBottom: 20,
     gap: 5, // Adds a little spacing between the cards
   },
   offlineBanner: {

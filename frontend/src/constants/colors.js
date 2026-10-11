@@ -1,37 +1,26 @@
 export const COLORS = {
-  // Primary
-  primary: '#1A3BC1',          // dark blue - main brand color
-  primaryGreen: '#2E7D32',     // green - safety/trust accent
-
-  // Backgrounds
-  background: '#FFFFFF',       // white
-  backgroundLight: '#F5F5F5',  // light gray
-
-  // Call to Action
-  cta: '#FF6B00',              // orange - book ride button
-  ctaYellow: '#FFC107',        // yellow - alternative CTA
-
-  // Accents
-  ladiesOnly: '#E91E8C',       // pink - ladies only feature
-  ladiesOnlySecondary: '#9C27B0', // purple - ladies only accent
-
-  // Tabs
-  tabActive: '#1A3BC1',        // dark blue active tab
-  tabInactive: '#999999',      // gray inactive tab
-
-  // Cards
-  cardBorder: '#1A3BC1',       // dark blue card border
+  primary: '#10B981',
+  primaryDark: '#047857',
+  primaryGreen: '#10B981',
+  secondary: '#38BDF8',
+  secondaryLight: '#E0F2FE',
+  navy: '#0F172A',
+  page: '#F8FAFC',
+  background: '#FFFFFF',
+  backgroundLight: '#F1F5F9',
+  cta: '#10B981',
+  ctaYellow: '#F59E0B',
+  ladiesOnly: '#E91E8C',
+  ladiesOnlySecondary: '#9C27B0',
+  tabActive: '#10B981',
+  tabInactive: '#64748B',
+  cardBorder: '#E2E8F0',
   cardBackground: '#FFFFFF',
-
-  // Map
-  mapGrid: '#E8F0FE',          // light blue grid
-  pitikDot: '#1A3BC1',         // dark blue dot
-  mapCircleBorder: '#1A3BC1',  // dark blue circle border
-
-  // Text
-  text: '#000000',
-  textSecondary: '#666666',
-
-  danger: '#E53935',
-  border: '#E8E8E8',
+  mapGrid: '#E0F2FE',
+  pitikDot: '#10B981',
+  mapCircleBorder: '#38BDF8',
+  text: '#0F172A',
+  textSecondary: '#64748B',
+  danger: '#EF4444',
+  border: '#E2E8F0',
 };

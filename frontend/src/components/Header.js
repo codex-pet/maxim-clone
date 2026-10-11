@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '../constants/colors';
 import { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -62,11 +63,14 @@ export default function Header({ userName, userEmail }) {
 
   return (
     <View style={styles.header}>
+      <StatusBar style="light" backgroundColor={COLORS.primary} />
       <View style={styles.leftSide}>
-        <View style={styles.container}>
-          <Ionicons name="car-outline" size={24} color={COLORS.primary} />
-        </View>
-        <Text style={styles.logo}>MAXIM</Text>
+        <Image
+          source={require('../../assets/img/goryde-logo-white.png')}
+          style={styles.logo}
+          resizeMode="contain"
+          accessibilityLabel="GoRyde"
+        />
       </View>
 
       <View style={styles.rightSide}>
@@ -86,7 +90,7 @@ export default function Header({ userName, userEmail }) {
               style={{ width: 24, height: 24, borderRadius: 12 }} 
             />
           ) : (
-            <Ionicons name="person-outline" size={24} color={COLORS.primary} />
+            <Ionicons name="person-outline" size={24} color={COLORS.background} />
           )}
         </TouchableOpacity>
       </View>
@@ -193,6 +197,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: COLORS.primary,
   },
   leftSide: {
     flexDirection: 'row',
@@ -200,9 +205,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   logo: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+    width: 58,
+    height: 58,
+    marginLeft: -2,
   },
   rightSide: {
     flexDirection: 'row',
@@ -210,13 +215,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   container: {
-    backgroundColor: COLORS.background,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     borderRadius: 20,
     padding: 8,
     borderWidth: 1,
-    borderColor: '#E8E8E8',
-    elevation: 4,
-    shadowColor: '#000',
+    borderColor: 'rgba(255,255,255,0.4)',
+    elevation: 2,
+    shadowColor: COLORS.navy,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,

@@ -17,12 +17,16 @@ export default function MainTabs() {
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.tabInactive,
         tabBarStyle: {
+          backgroundColor: COLORS.cardBackground,
           borderTopWidth: 1,
-          borderTopColor: '#E8E8E8',
+          borderTopColor: COLORS.border,
+          paddingTop: 7,
+          paddingBottom: 6,
           shadowColor: '#000',
-          shadowOffset: { width: 2, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.06,
+          shadowRadius: 10,
+          elevation: 10,
         },
         tabBarIcon: ({ color, size }) => {
           let iconName;

@@ -5,7 +5,7 @@ import PitikDot from './PitikDot';
 export default function MapPlaceholder({ color, latitude, longitude }) {
     return (
         <View style={[styles.circle, {
-            borderColor: color || COLORS.primary,
+            borderColor: color || COLORS.mapCircleBorder,
             backgroundColor: color === COLORS.ladiesOnly ? '#FCE4EC' : COLORS.mapGrid,
         }]}>
             <PitikDot />
@@ -22,9 +22,10 @@ export default function MapPlaceholder({ color, latitude, longitude }) {
 
 const styles = StyleSheet.create({
     circle: {
-        width: 320,
-        height: 320,
-        borderRadius: 160,
+        width: '100%',
+        maxWidth: 320,
+        aspectRatio: 1,
+        borderRadius: 200,
         borderWidth: 2,
         alignItems: 'center',
         justifyContent: 'center',

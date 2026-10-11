@@ -7,7 +7,7 @@ export default function FeatureCard(props) {
     return (
         <View style={[styles.card, { borderColor: props.color || COLORS.cardBorder }]}>
             <View style={styles.iconContainer}>
-                <Ionicons name={props.icon} size={24} color={props.color} />
+                <Ionicons name={props.icon} size={24} color={props.color || COLORS.primary} />
             </View>
 
             <View style={styles.textContainer}>
@@ -23,11 +23,11 @@ const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1.5,
+        borderWidth: 1,
         borderColor: COLORS.cardBorder,
-        borderRadius: 12,
-        backgroundColor: COLORS.background,
-        padding: 12,
+        borderRadius: 16,
+        backgroundColor: COLORS.cardBackground,
+        padding: 16,
         marginBottom: 10,
     },
 
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
     },
 
     description: {
-        fontSize: 12,
+        fontSize: 13,
         color: COLORS.textSecondary,
     }
 });

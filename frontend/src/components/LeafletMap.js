@@ -16,7 +16,7 @@ const LeafletMap = ({
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Maxim Prototype Map</title>
+      <title>GoRyde Map</title>
       <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -62,7 +62,7 @@ const LeafletMap = ({
             if (driverMarker) map.removeLayer(driverMarker);
             driverMarker = L.circleMarker([driver.lat, driver.lng], {
               color: 'blue',
-              fillColor: '#30f',
+              fillColor: '#38BDF8',
               fillOpacity: 0.5,
               radius: 8
             }).addTo(map).bindTooltip("Driver", { permanent: true, direction: 'top' });
@@ -80,7 +80,7 @@ const LeafletMap = ({
                   if (routeLayer) map.removeLayer(routeLayer);
                   
                   routeLayer = L.geoJSON(route.geometry, {
-                    style: { color: '#FFD600', weight: 5, opacity: 0.7 }
+                    style: { color: '#38BDF8', weight: 5, opacity: 0.8 }
                   }).addTo(map);
                   
                   map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
@@ -134,7 +134,7 @@ const LeafletMap = ({
         javaScriptEnabled={true}
         domStorageEnabled={true}
         startInLoadingState={true}
-        renderLoading={() => <ActivityIndicator style={styles.loader} size="large" color="#FFD600" />}
+        renderLoading={() => <ActivityIndicator style={styles.loader} size="large" color="#10B981" />}
       />
     </View>
   );
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#eee',
+    borderColor: '#E2E8F0',
   },
   map: {
     flex: 1,

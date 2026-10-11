@@ -205,8 +205,8 @@ export default function PaymentScreen({ navigation, route }) {
 
                     <Text style={styles.sectionTitle}>Select payment method</Text>
                     <PaymentMethodItem icon="wallet-outline" label="GCash" description="E-Wallet" selected={selectedPayment === 'gcash'} onSelect={() => setSelectedPayment('gcash')} iconBackground='#0066CC' />
-                    <PaymentMethodItem icon="card-outline" label="Maya" description="E-Wallet" selected={selectedPayment === 'maya'} onSelect={() => setSelectedPayment('maya')} iconBackground='#2E7D32' />
-                    <PaymentMethodItem icon="cash-outline" label="Cash" description="Pay driver directly" selected={selectedPayment === 'cash'} onSelect={() => setSelectedPayment('cash')} iconBackground='#FF6B00' />
+                    <PaymentMethodItem icon="card-outline" label="Maya" description="E-Wallet" selected={selectedPayment === 'maya'} onSelect={() => setSelectedPayment('maya')} iconBackground={COLORS.primary} />
+                    <PaymentMethodItem icon="cash-outline" label="Cash" description="Pay driver directly" selected={selectedPayment === 'cash'} onSelect={() => setSelectedPayment('cash')} iconBackground={COLORS.ctaYellow} />
 
                     <TouchableOpacity
                         style={[styles.confirmButton, { backgroundColor: isLadiesOnly ? COLORS.ladiesOnly : COLORS.primary }, isLoading && { opacity: 0.7 }]}

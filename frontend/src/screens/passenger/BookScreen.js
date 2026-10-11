@@ -329,9 +329,9 @@ export default function BookScreen({ navigation, route }) {
   const passengerPhone = user?.phoneNumber || 'No Contact Info';
 
   return (
-    <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: COLORS.background }}>
+    <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: COLORS.primary }}>
       <Header userName={userName} userEmail={userEmail} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ backgroundColor: COLORS.page }} contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
         <View style={[styles.map, acceptedTrip && { height: 450 }]}>
           <LeafletMap
             pickup={acceptedTrip ? { lat: acceptedTrip.pickupLocation.latitude, lng: acceptedTrip.pickupLocation.longitude } : pickupCoords}

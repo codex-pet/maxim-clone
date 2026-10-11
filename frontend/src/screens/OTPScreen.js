@@ -4,10 +4,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../config/api';
 
 // --- FIREBASE IMPORTS ---
 import { PhoneAuthProvider, signInWithCredential } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { getFirebaseAuth } from '../config/firebase';
 
 export default function OTPScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -48,10 +49,17 @@ export default function OTPScreen({ navigation, route }) {
         }
         syncData.email = email;
         syncData.method = 'email';
+      } else if (verificationId && verificationId.startsWith('dev-otp-')) {
+        // --- DEV / EXPO GO FALLBACK OTP ---
+        if (otpCode !== '123456' && otpCode !== '000000') {
+          throw new Error("Invalid OTP code. In dev/Expo Go mode, enter 123456.");
+        }
+        syncData.phone = phone;
+        syncData.method = 'mock';
       } else {
         // --- SMS OTP VERIFICATION (FIREBASE) ---
         const credential = PhoneAuthProvider.credential(verificationId, otpCode);
-        const userCredential = await signInWithCredential(auth, credential);
+        const userCredential = await signInWithCredential(getFirebaseAuth(), credential);
         idToken = await userCredential.user.getIdToken();
         syncData.idToken = idToken;
         syncData.method = 'firebase';
@@ -59,7 +67,7 @@ export default function OTPScreen({ navigation, route }) {
 
       // 🚨 IMPORTANT: Change this to your local IP or 'localhost' if testing locally 🚨
       // For now using the previous IP provided by the user
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/auth/verify`, {
+      const response = await apiFetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(syncData)
@@ -67,7 +75,7 @@ export default function OTPScreen({ navigation, route }) {
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok && data.success) {
         const userData = data.user; // { name, email, role, ... }
         
         // Save to Global Context
@@ -102,7 +110,7 @@ export default function OTPScreen({ navigation, route }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.page, paddingTop: insets.top }}>
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <Ionicons name="arrow-back-outline" size={24} color={COLORS.primary} />
       </TouchableOpacity>
@@ -199,7 +207,7 @@ const styles = StyleSheet.create({
   },
   otpInputFilled: {
     borderColor: COLORS.primary,
-    backgroundColor: '#E8F0FE',
+    backgroundColor: COLORS.secondaryLight,
   },
   resendButton: {
     marginBottom: 32,

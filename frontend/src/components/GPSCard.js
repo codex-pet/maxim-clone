@@ -27,11 +27,11 @@ export default function GPSCard({ latitude, longitude, locked }) {
 
 const styles = StyleSheet.create({
   outer: {
-    backgroundColor: '#FFEDE0',
+    backgroundColor: COLORS.secondaryLight,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.cta,
+    borderColor: COLORS.secondary,
     marginBottom: 16,
   },
   inner: {

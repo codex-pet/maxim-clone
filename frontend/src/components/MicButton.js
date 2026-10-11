@@ -45,6 +45,7 @@ export default function MicButton({ recordingState, onPressIn, onPressOut }) {
           style={[styles.button, { backgroundColor: getButtonColor() }]}
           onPressIn={onPressIn}
           onPressOut={onPressOut}
+          disabled={recordingState === 'processing'}
           activeOpacity={0.8}
         >
           <Ionicons name={getIcon()} size={48} color={COLORS.background} />

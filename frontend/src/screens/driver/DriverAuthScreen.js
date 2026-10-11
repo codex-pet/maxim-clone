@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image } from 'react-native';
 import { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,22 +17,24 @@ export default function DriverAuthScreen({ navigation }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.page, paddingTop: insets.top }}>
 
       {/* BACK BUTTON */}
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back-outline" size={24} color={COLORS.background} />
+        <Ionicons name="arrow-back-outline" size={24} color={COLORS.primary} />
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
 
         {/* HEADER */}
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Ionicons name="car-sport-outline" size={40} color={COLORS.background} />
-          </View>
-          <Text style={styles.appName}>MAXIM</Text>
-          <Text style={styles.role}>Driver Portal</Text>
+          <Image
+            source={require('../../../assets/img/goryde-logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+            accessibilityLabel="GoRyde"
+          />
+          <Text style={styles.role}>DRIVER PORTAL</Text>
           <Text style={styles.tagline}>Earn, Drive, Deliver</Text>
         </View>
 
@@ -204,47 +206,47 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   header: {
-    backgroundColor: COLORS.primaryGreen,
+    backgroundColor: COLORS.page,
     alignItems: 'center',
-    paddingVertical: 48,
+    paddingVertical: 24,
     paddingHorizontal: 24,
   },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  appName: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.background,
-    letterSpacing: 4,
+  logoImage: {
+    width: 280,
+    height: 150,
+    marginBottom: 4,
   },
   role: {
     fontSize: 16,
-    color: COLORS.background,
-    opacity: 0.9,
+    color: COLORS.primary,
     marginTop: 4,
     fontWeight: 'bold',
     letterSpacing: 2,
   },
   tagline: {
     fontSize: 13,
-    color: COLORS.background,
-    opacity: 0.7,
+    color: COLORS.textSecondary,
     marginTop: 4,
   },
   card: {
     backgroundColor: COLORS.background,
+    flex: 1,
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    marginTop: -24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginTop: 8,
     padding: 24,
-    minHeight: 500,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 2,
   },
   tabRow: {
     flexDirection: 'row',
@@ -290,7 +292,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#E8F0FE',
+    backgroundColor: COLORS.secondaryLight,
     borderRadius: 12,
     padding: 12,
     marginBottom: 20,
