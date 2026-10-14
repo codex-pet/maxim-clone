@@ -113,11 +113,10 @@ export default function PaymentScreen({ navigation, route }) {
         }
     };
 
-    return (
-        <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: COLORS.background }}>
-
-            {isFindingDriver && (
-                <View style={styles.findingDriverOverlay}>
+    if (isFindingDriver) {
+        return (
+            <View style={[styles.fullScreen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+                <View style={styles.findingDriverScreen}>
                     <ActivityIndicator size={60} color={isLadiesOnly ? COLORS.ladiesOnly : COLORS.primary} />
                     <Text style={styles.findingDriverTitle}>Finding a driver...</Text>
                     <Text style={styles.findingDriverSub}>Please wait while we connect you to the nearest available rider.</Text>
@@ -132,8 +131,12 @@ export default function PaymentScreen({ navigation, route }) {
                         <Text style={styles.cancelWaitText}>Cancel</Text>
                     </TouchableOpacity>
                 </View>
-            )}
+            </View>
+        );
+    }
 
+    return (
+        <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: COLORS.background }}>
             <View style={styles.paymentHeader}>
                 <TouchableOpacity
                     style={{ width: 40 }}
@@ -222,7 +225,8 @@ export default function PaymentScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-    findingDriverOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255, 255, 255, 0.95)', justifyContent: 'center', alignItems: 'center', zIndex: 999, padding: 30 },
+    fullScreen: { flex: 1, backgroundColor: COLORS.background },
+    findingDriverScreen: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30 },
     findingDriverTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.text, marginTop: 24 },
     findingDriverSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', marginTop: 8, lineHeight: 20 },
     cancelWaitButton: { marginTop: 40, paddingVertical: 10, paddingHorizontal: 30, borderRadius: 20, backgroundColor: '#F0F0F0' },
